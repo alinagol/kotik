@@ -1,0 +1,26 @@
+{
+  "imdb": {
+    "url": "",
+    "apikey": ""
+  },
+  "textrazor": {
+    "apikey": ""
+  },
+  "ibm": {
+    "apikey": "",
+    "iam_apikey_description": "",
+    "iam_apikey_name": "",
+    "iam_role_crn": "",
+    "iam_serviceid_crn": "",
+    "url": ""
+  },
+  "ororo": {
+    "url": "",
+    "username": "",
+    "password": ""
+  },
+  "neo4j": {
+    "url": ""
+
+  }
+}
