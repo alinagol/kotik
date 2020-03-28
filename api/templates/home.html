@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Ororo Recommendation System</title>
+    <style> img {width: 25%;} </style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" >
+</head>
+<body>
+
+    <h1> Ororo Recommendation System </h1>
+
+<div>
+    <p><a href="/media">Media</a></p>
+    <p><a href="/categories">Topics</a></p>
+</div>
+
+    <form action="/update">
+        <input type="submit" value="Refresh Database"/>
+    </form>
+</body>
+</html>

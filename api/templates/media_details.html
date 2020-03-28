@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Analyze metric</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" >
+</head>
+<body>
+
+
+{% for key, value in media.items() recursive %}
+    <li>
+     {{ key }}: {{ value }}
+    </li>
+{% endfor %}
+
+     <hr>
+
+     <form>
+
+     <input type="button" value="Refresh" onclick="window.location.reload();">
+     <input type="button" value="Back" onclick="history.back()">
+         <input type="button" value="Home" onclick="window.location.href='/'" />
+     </form>
+
+</body>
+</html>
+

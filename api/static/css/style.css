@@ -1,0 +1,17 @@
+h1, h2, h3      { margin: 0; background-color: #0088cc; color: white; border-radius: 3px;  padding-top: 5px; padding-left: 10px; padding-bottom: 10px }
+
+html            { font-family: 'helvetica neue', helvetica, arial, sans-serif; }
+
+.page           { margin: 2em auto; width: 35em; border: 5px solid #ccc; padding: 0.8em; background: white; }
+
+table           { table-layout: fixed; border-collapse: collapse; margin-left: 10px; margin-top: 10px; }
+
+table, th, td   { border: 1px solid black; padding: 5px 5px; }
+
+tr:hover        {background-color:  #0088cc; color: white; }
+
+input[type=text] { width: 50%; padding: 5px 5px;  margin: 3px 0; box-sizing: border-box;}
+
+input[type=checkbox]  {padding: 5px 5px;  margin: 3px 0; box-sizing: border-box;}
+
+input[type=button], input[type=submit], input[type=reset] { background-color:  #0088cc;  width: 100px; border: none; color: white; text-decoration: none; border-radius: 3px; cursor: pointer; }

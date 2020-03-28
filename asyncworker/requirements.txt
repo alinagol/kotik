@@ -1,0 +1,5 @@
+celery[redis]
+requests
+textrazor
+neo4j
+flower

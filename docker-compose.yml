@@ -1,0 +1,33 @@
+version: "3"
+services:
+  web:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+     - "5001:5001"
+    depends_on:
+      - redis
+      - neo4j
+  neo4j:
+    image: neo4j:latest
+    environment:
+      - NEO4J_AUTH=none
+    ports:
+      - '7474:7474'
+      - '7687:7687'
+    volumes:
+      - 'db:/data'
+  worker:
+    build:
+      context: ./asyncworker
+      dockerfile: Dockerfile
+    depends_on:
+      - redis
+      - neo4j
+  redis:
+    image: redis
+
+volumes:
+  db:

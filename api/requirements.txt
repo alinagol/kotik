@@ -1,0 +1,3 @@
+celery[redis]
+neo4j
+flask
