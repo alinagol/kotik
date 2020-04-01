@@ -302,6 +302,28 @@ def add_imdb_data(imdb_client, imdb_id, neo4jclient):
                     genre.lower().strip(),
                 )
                 queries.append(g)
+        if "Actors" in imdb_data.keys():
+            for actor in imdb_data["Actors"].split(","):
+                g = """MATCH (m: Movie {imdb_id: "%s"})
+                MERGE (p: Person {name: "%s"})
+                WITH p, m
+                MERGE (p)-[:ACTED_IN]->(m);
+                """ % (
+                    imdb_id,
+                    actor.lower().strip(),
+                )
+                queries.append(g)
+        if "Director" in imdb_data.keys():
+            for director in imdb_data["Director"].split(","):
+                g = """MATCH (m: Movie {imdb_id: "%s"})
+                MERGE (p: Person {name: "%s"})
+                WITH p, m
+                MERGE (p)-[:DIRECTED]->(m);
+                """ % (
+                    imdb_id,
+                    director.lower().strip(),
+                )
+                queries.append(g)
         with neo4jclient.session() as session:
             for q in queries:
                 session.run(q)
