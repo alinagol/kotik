@@ -95,6 +95,7 @@ def update_database():
                 item_clean["length"] = 0
 
             m = """MERGE (m: Movie {name: "%s", 
+            slug: "%s",
             type: "%s",
             year: %i,
             imdb_rating: %f,
@@ -107,6 +108,7 @@ def update_database():
             textrazor_data: false});
             """ % (
                 item_clean["name"],
+                item_clean["slug"],
                 media_type,
                 int(item_clean["year"]),
                 float(item_clean["imdb_rating"]),

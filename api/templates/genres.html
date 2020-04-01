@@ -3,14 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <link rel="shortcut icon" href="">
-    <title>Media</title>
+    <title>Genres</title>
     <style> img {width: 5%;} </style>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" >
 </head>
 <body>
-     <form action="/media/details">
+     <form action="/genres/media">
 
-         Title: <input name="title"> <br>
+         <select name="genre">
+             {% for genre in genres %}
+              <option value="{{genre}}"> {{ genre }} </option>
+             {% endfor %}
+         </select>
 
          <input type="submit" value="Submit"> <br>
      </form>

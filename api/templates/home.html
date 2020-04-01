@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <link rel="shortcut icon" href="">
     <title>Ororo Recommendation System</title>
     <style> img {width: 25%;} </style>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" >
@@ -10,8 +11,10 @@
 
     <h1> Ororo Recommendation System </h1>
 
+    <a> Movies in database: {{ count }} </a>
+
 <div>
-    <p><a href="/media">Media</a></p>
+    <p><a href="/genres">Genres</a></p>
     <p><a href="/categories">Topics</a></p>
 </div>
 

@@ -2,18 +2,19 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Analyze metric</title>
+    <link rel="shortcut icon" href="">
+    <title>Media</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" >
 </head>
 <body>
 
-
+<ul>
 {% for key, value in media.items() recursive %}
     <li>
      {{ key }}: {{ value }}
     </li>
 {% endfor %}
-
+</ul>
      <hr>
 
      <form>
