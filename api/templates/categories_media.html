@@ -6,18 +6,25 @@
     <style> img {width: 5%;} </style>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" >
 </head>
-<h2> {{ category }} </h2>
+
+<h2> Topic {{ category }} </h2>
 <body>
-{% for m in media %}
- <li>  {{ m }} </li>
-{% endfor %}
 
-     <hr>
- <form>
-     <input type="button" value="Back" onclick="history.back()">
-     <input type="button" value="Home" onclick="window.location.href='/'" />
-  </form>
+    <ul>
+        {% for m in media %}
+            <li>
+                <form action="../media/details">
+                    <input type="hidden" name="title"  value="{{ m }}">
+                    <input type="submit" value="{{ m }} " style="background-color: white; color: #0088cc; width: 100%; text-align: left">
+                </form>
+            </li>
+        {% endfor %}
+    </ul>
 
-
+    <hr>
+    <form>
+        <input type="button" value="Back" onclick="history.back()">
+        <input type="button" value="Home" onclick="window.location.href='/'" />
+    </form>
 </body>
 </html>

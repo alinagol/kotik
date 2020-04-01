@@ -46,7 +46,7 @@ def media():
 def get_media():
     title = request.args.get("title")
     with neo.session() as s:
-        response = s.run("MATCH (m:Movie {name: '%s'}) RETURN m" % title).data()[0]
+        response = s.run("MATCH (m:Movie {name: '%s'}) RETURN m" % title).single().value()
     return render_template("media_details.html", media=response)
 
 

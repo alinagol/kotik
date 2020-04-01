@@ -243,10 +243,7 @@ def add_ibm_data(ibm_client, imdb_id, neo4jclient):
         for emotion, score in ibm_data["emotion"]["document"]["emotion"].items():
             q = """MATCH (m: Movie {imdb_id: "%s"})
             SET m.ibm_data = true
-            MERGE (e: Emotion {name: "%s"})
-            WITH m, e
-            MERGE (e)-[r:HAS_MOVIE]->(m)
-            SET r.score = %f;
+            SET m.%s = %f
             """ % (
                 imdb_id,
                 emotion.lower().strip(),
