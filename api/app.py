@@ -34,7 +34,7 @@ def home():
 @app.route("/update")
 def update_db():
     celery.send_task("tasks.update_database")
-    return redirect(url_for('home'))
+    return redirect(url_for("home"))
 
 
 @app.route("/media")
@@ -46,7 +46,7 @@ def media():
 def get_media():
     title = request.args.get("title")
     with neo.session() as s:
-        response = s.run("MATCH (m:Movie {name: '%s'}) RETURN m" % title).data()
+        response = s.run("MATCH (m:Movie {name: '%s'}) RETURN m" % title).data()[0]
     return render_template("media_details.html", media=response)
 
 
