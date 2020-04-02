@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="shortcut icon" href="">
+    <title>Choose</title>
+    <style> img {width: 5%;} </style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" >
+</head>
+
+<body>
+    <h2> Filters </h2>
+    <ul>
+        {% for key, value in filters.items() recursive %}
+          <li> {{ key }}: {{ value }} </li>
+        {% endfor %}
+
+    </ul>
+
+    <h2> Media </h2>
+
+    <ul>
+        {% for m in media %}
+            <li>
+                <form action="../media/details">
+                    <input type="hidden" name="slug"  value="{{ m.slug }}">
+                    <input type="submit" value="{{ m.title }} " style="background-color: white; color: #0088cc; width: 100%; text-align: left">
+                </form>
+            </li>
+        {% endfor %}
+    </ul>
+
+    <hr>
+    <form>
+        <input type="button" value="Back" onclick="history.back()">
+        <input type="button" value="Home" onclick="window.location.href='/'" />
+    </form>
+</body>
+</html>

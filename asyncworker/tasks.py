@@ -4,6 +4,7 @@ import logging
 import os
 
 from neo4j import GraphDatabase
+from neo4j.exceptions import CypherError
 import textrazor
 
 from datasource import Ororo, IMDB, IBMWatson
@@ -38,6 +39,12 @@ def update_database():
 
     # Neo4j
     neo = GraphDatabase.driver(config["neo4j"]["url"], encrypted=False)
+
+    try:
+        with neo.session() as session:
+            session.run("CREATE INDEX movie_slug FOR (m:Movie) ON (m.slug)")
+    except CypherError:
+        pass
 
     # Data sources
     ororo = Ororo(
@@ -178,7 +185,7 @@ def add_textrazor_data(textrazor_client, imdb_id, neo4jclient):
                 text = data_flag[0]["m.description"]
     queries = []
     try:
-        log.info(f'Getting Textrazor data for {imdb_id}')
+        log.info(f"Getting Textrazor data for {imdb_id}")
         topics = textrazor_client.analyze(text).topics()
         for t in topics:
             if t.score > 0.5:
@@ -219,7 +226,7 @@ def add_ibm_data(ibm_client, imdb_id, neo4jclient):
                 text = data_flag[0]["m.description"]
     queries = []
     try:
-        log.info(f'Getting IBM data for {imdb_id}')
+        log.info(f"Getting IBM data for {imdb_id}")
         ibm_data = ibm_client.get(
             path="/v1/analyze",
             params={
@@ -273,7 +280,7 @@ def add_imdb_data(imdb_client, imdb_id, neo4jclient):
             return
     queries = []
     try:
-        log.info(f'Getting IMDB data for {imdb_id}')
+        log.info(f"Getting IMDB data for {imdb_id}")
         imdb_data = imdb_client.get(params={"i": f"{imdb_id}"})
         q = (
             """MATCH (m: Movie {imdb_id: "%s"}) 
