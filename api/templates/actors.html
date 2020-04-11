@@ -3,16 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <link rel="shortcut icon" href="">
-    <title>Categories</title>
+    <title>Actors</title>
     <style> img {width: 5%;} </style>
 <link rel="stylesheet" type= "text/css" href="{{ url_for('static', filename='css/style.css') }}" >
 </head>
 <body>
-     <form action="/categories/media">
+     <form action="/actors/media">
 
-         <select name="category">
-             {% for category in categories %}
-              <option value="{{category}}"> {{ category }} </option>
+         <select name="actor">
+             {% for actor in actors %}
+              <option value="{{actor}}"> {{ actor }} </option>
              {% endfor %}
          </select>
 

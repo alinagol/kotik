@@ -40,11 +40,18 @@ def update_database():
     # Neo4j
     neo = GraphDatabase.driver(config["neo4j"]["url"], encrypted=False)
 
-    try:
-        with neo.session() as session:
-            session.run("CREATE INDEX movie_slug FOR (m:Movie) ON (m.slug)")
-    except CypherError:
-        pass
+    index = [
+        "CREATE INDEX movie_slug FOR (m:Movie) ON (m.slug, m.name)",
+        "CREATE INDEX genre_name FOR (g:Genre) ON (g.name)",
+        "CREATE INDEX category_name FOR (c:Category) ON (c.name)"
+        "CREATE INDEX person_name FOR (p:Person) ON (p.name)",
+    ]
+    for i in index:
+        try:
+            with neo.session() as session:
+                session.run(i)
+        except CypherError:
+            pass
 
     # Data sources
     ororo = Ororo(
@@ -60,7 +67,7 @@ def update_database():
     # Get movies and series from Ororo
     movies = ororo.get(path="movies")["movies"]
     shows = ororo.get(path="shows")["shows"]
-    log.info(f"Found {len(movies)} movies and {len(shows)} in Ororo.")
+    log.info(f"Found {len(movies)} movies and {len(shows)} shows in Ororo.")
 
     library = {"movies": movies, "shows": shows}
 
@@ -84,8 +91,8 @@ def update_database():
                 if media:
                     if not media[0]["m.imdb_data"]:
                         add_imdb_data(imdb, imdb_id, neo)
-                    if not media[0]["m.textrazor_data"]:
-                        add_textrazor_data(textrazorclient, imdb_id, neo)
+                    # if not media[0]["m.textrazor_data"]:
+                    #     add_textrazor_data(textrazorclient, imdb_id, neo)
                     if not media[0]["m.ibm_data"]:
                         add_ibm_data(ibm, imdb_id, neo)
                     log.info(f'Skipping {media[0]["m.name"]}, already in Neo4j')
@@ -164,7 +171,7 @@ def update_database():
             # Extra information
             add_imdb_data(imdb, imdb_id, neo)
             add_ibm_data(ibm, imdb_id, neo)
-            add_textrazor_data(textrazorclient, imdb_id, neo)
+            # add_textrazor_data(textrazorclient, imdb_id, neo)
 
 
 def add_textrazor_data(textrazor_client, imdb_id, neo4jclient):
@@ -188,7 +195,7 @@ def add_textrazor_data(textrazor_client, imdb_id, neo4jclient):
         log.info(f"Getting Textrazor data for {imdb_id}")
         topics = textrazor_client.analyze(text).topics()
         for t in topics:
-            if t.score > 0.5:
+            if t.score > 0.75:
                 q = """MATCH (m: Movie {imdb_id: "%s"})
                 SET m.textrazor_data = true
                 MERGE (t: Topic {name: "%s"})
@@ -197,7 +204,7 @@ def add_textrazor_data(textrazor_client, imdb_id, neo4jclient):
                 SET r.score = %f;
                 """ % (
                     imdb_id,
-                    t.label.lower().strip(),
+                    cypher_escape(t.label.lower().strip()),
                     t.score,
                 )
                 queries.append(q)
@@ -236,19 +243,39 @@ def add_ibm_data(ibm_client, imdb_id, neo4jclient):
             },
         )
         for t in ibm_data["categories"]:
-            if t["score"] > 0.5:
-                q = """MATCH (m: Movie {imdb_id: "%s"})
-                SET m.ibm_data = true
-                MERGE (c: Category {name: "%s"})
-                WITH m, c
-                MERGE (c)-[r:HAS_MOVIE]->(m)
-                SET r.score = %f;
-                """ % (
-                    imdb_id,
-                    t["label"].lower().strip(),
-                    t["score"],
-                )
-                queries.append(q)
+            if t["score"] > 0.75:
+                categories = t["label"].split("/")
+                categories = [c.lower().strip() for c in categories if c]
+                if categories:
+                    for i, category in enumerate(categories[1:]):
+                        if i == 0:
+                            q = 'MERGE (c:Category {name: "%s"})' % cypher_escape(
+                                category.lower().strip()
+                            )
+                        else:
+                            q = """MATCH (n:Category {name: "%s"})
+                            MERGE (c:Category {name: "%s"})
+                            WITH c, n
+                            MERGE (n)-[:HAS_SUBCATEGORY]->(c)
+                            """ % (
+                                cypher_escape(category),
+                                cypher_escape(categories[i - 1]),
+                            )
+                        queries.append(q)
+                    for category in categories[1:]:
+                        q = """
+                        MATCH (m:Movie {imdb_id: "%s"})
+                        SET m.ibm_data = true
+                        MERGE (c:Category {name: "%s"})
+                        WITH m, c
+                        MERGE (c)-[r:HAS_MOVIE]->(m)
+                        SET r.score = %f;
+                        """ % (
+                            imdb_id,
+                            cypher_escape(category),
+                            t["score"],
+                        )
+                        queries.append(q)
         for emotion, score in ibm_data["emotion"]["document"]["emotion"].items():
             q = """MATCH (m: Movie {imdb_id: "%s"})
             SET m.ibm_data = true

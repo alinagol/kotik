@@ -1,4 +1,4 @@
-FROM python:3.6-alpine
+FROM python:3.8-slim-buster
 
 ENV CELERY_BROKER_URL redis://redis:6379/0
 ENV CELERY_RESULT_BACKEND redis://redis:6379/0
@@ -10,8 +10,6 @@ ENV DEBUG true
 
 # expose the app port
 EXPOSE 5001
-
-RUN pip install gunicorn
 
 COPY ./requirements.txt .
 RUN pip install -r requirements.txt

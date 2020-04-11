@@ -4,18 +4,28 @@
     <meta charset="UTF-8">
     <link rel="shortcut icon" href="">
     <title>Media</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" >
+<link rel="stylesheet" type= "text/css" href="{{ url_for('static', filename='css/style.css') }}" >
 </head>
 <body>
 
-<ul>
-{% for key, value in media.items() recursive %}
-    <li>
-     {{ key }}: {{ value }}
-    </li>
-{% endfor %}
-</ul>
-     <hr>
+<h1> <a href="{{ media.ororo_link }}"> {{ media.name }} {{ media.year }} </a> </h1>
+
+<div class='parent flex-parent'>
+
+    <div class='child flex-child'>
+        <p> Rating: {{ media.imdb_rating }} </p>
+        <p> {{ media.plot }} </p>
+    </div>
+
+<div class='child flex-child'>
+<figure>
+<img src=" ../{{ plot }}" alt="Plot">
+</figure>
+</div>
+</div>
+
+
+<hr>
 
      <form>
 
