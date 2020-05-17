@@ -10,7 +10,19 @@ table, th, td   { border: 1px solid black; padding: 5px 5px; }
 
 tr:hover        {background-color:  #0088cc; color: white; }
 
-a:link          {color: red; text-decoration: none;}
+a:link          {color: white; text-decoration: none;}
+
+.column {
+  float: left;
+  width: 33%;
+}
+
+/* Clear floats after the columns */
+.row:after {
+  content: "";
+  display: table;
+  clear: both;
+}
 
 
 .flex-parent    {display: flex;}

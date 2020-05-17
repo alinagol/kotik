@@ -1,5 +1,7 @@
 celery[redis]
 requests
-textrazor
 neo4j
-flower
+pandas
+nltk
+gensim
+sklearn

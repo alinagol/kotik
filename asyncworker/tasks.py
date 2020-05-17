@@ -3,12 +3,17 @@ import json
 import logging
 import os
 
+import gensim
 from neo4j import GraphDatabase
 from neo4j.exceptions import CypherError
-import textrazor
+import nltk
+from nltk.corpus import stopwords
+from nltk.stem.snowball import SnowballStemmer
+from nltk.tokenize import RegexpTokenizer
+import pandas as pd
+from sklearn.preprocessing import MinMaxScaler
 
 from datasource import Ororo, IMDB, IBMWatson
-
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -22,12 +27,135 @@ CELERY_RESULT_BACKEND = os.environ.get(
 
 celery = Celery("tasks", broker=CELERY_BROKER_URL, backend=CELERY_RESULT_BACKEND)
 
+NUM_TOPICS = 100
+
 
 def cypher_escape(s):
     try:
         return s.replace('"', "'")
     except AttributeError:
         return s
+
+
+@celery.task(name="tasks.find_similarities")
+def find_similarities():
+    log.info("Finding similarities...")
+
+    with open("config.json") as f:
+        config = json.load(f)
+
+    neo = GraphDatabase.driver(config["neo4j"]["url"], encrypted=False)
+
+    with neo.session() as session:
+        q = "MATCH (m:Movie) RETURN m as movie"
+        movies = session.run(q).data()
+
+    nltk.download('stopwords')
+
+    tokenizer = RegexpTokenizer(r'\w+')
+    stemmer = SnowballStemmer("english")
+    stop_list = stopwords.words('english')
+
+    dictionary = gensim.corpora.Dictionary()
+
+    for movie in movies:
+        if movie['movie']['plot'] is None:
+            plot = movie['movie']['description'].lower()
+        else:
+            plot = movie['movie']['plot'].lower()
+        plot_tokenized = tokenizer.tokenize(plot)
+        plot_tokenized_stemmed = [stemmer.stem(word) for word in plot_tokenized]
+        dictionary.add_documents([plot_tokenized_stemmed])
+
+    stop_ids = [dictionary.token2id[stopword] for stopword in stop_list if stopword in dictionary.token2id]
+    once_ids = [tokenid for tokenid, docfreq in dictionary.dfs.items() if docfreq == 1]
+    dictionary.filter_tokens(stop_ids + once_ids)
+    dictionary.compactify()
+
+    corpus = []
+    gensim_id = 0
+    for movie in movies:
+        if movie['movie']['plot'] is None:
+            plot = movie['movie']['description'].lower()
+        else:
+            plot = movie['movie']['plot'].lower()
+        plot_tokenized = tokenizer.tokenize(plot)
+        plot_tokenized_stemmed = [stemmer.stem(word) for word in plot_tokenized]
+        corpus.append(dictionary.doc2bow(plot_tokenized_stemmed))
+        movie.update({'gensim_id': gensim_id})
+        gensim_id += 1
+
+    tfidf = gensim.models.TfidfModel(corpus)
+    corpus_tfidf = tfidf[corpus]
+
+    lsi = gensim.models.LsiModel(corpus_tfidf, id2word=dictionary, num_topics=NUM_TOPICS)
+
+    index = gensim.similarities.MatrixSimilarity(lsi[corpus_tfidf])
+
+    corr = calculate_correlations()
+    corr_scaled = MinMaxScaler(feature_range=(-1,1)).fit_transform(corr)
+
+    log.info("Updating neo4j with similarities")
+
+    for i, similarities in enumerate(index):
+        assert i == movies[i]['gensim_id']
+        correlations = corr_scaled[i]
+        sim_corr = 0.75*similarities + 0.25*correlations
+        neighbours = sorted(enumerate(sim_corr), key=lambda item: -item[1])[1:11]
+        for j, similarity in neighbours:
+            if similarity > 0.25:
+                with neo.session() as session:
+                    q = """MATCH (m:Movie {slug: "%s"}) 
+                    MATCH (sm: Movie {slug: "%s"}) 
+                    MERGE (m)-[r:SIMILAR]-(sm)
+                    SET r.similarity = %f
+                    """ % (movies[i]["movie"]["slug"], movies[j]["movie"]["slug"], similarity)
+                    session.run(q)
+
+
+def calculate_correlations():
+    log.info("Calculating correlations...")
+
+    with open("config.json") as f:
+        config = json.load(f)
+
+    # Neo4j
+    neo = GraphDatabase.driver(config["neo4j"]["url"], encrypted=False)
+
+    with neo.session() as session:
+        q = """MATCH (m:Movie)
+        OPTIONAL MATCH (g:Genre)-[:HAS_MOVIE]->(m)
+        OPTIONAL MATCH (c:Category)-[:HAS_MOVIE]->(m)
+        WITH m, collect(distinct g.name) as genres, collect(distinct c.name) as categories
+        RETURN m.slug as slug, 
+               m.imdb_id as id, 
+               m.sadness as sadness, 
+               m.anger as anger, 
+               m.joy as joy, 
+               m.fear as fear, 
+               m.disgust as disgust, 
+               m.imdb_rating as rating, 
+               genres,
+               categories
+        """
+        movies = session.run(q).data()
+
+    df = pd.DataFrame(movies)
+
+    genres = set([g for g in df['genres'].values for g in g])
+    categories = set([g for g in df['categories'].values for g in g])
+
+    for genre in genres:
+        df[genre] = df.apply(lambda x: 1 if genre in x['genres'] else 0, axis=1)
+    for category in categories:
+        df[category] = df.apply(lambda x: 1 if category in x['categories'] else 0, axis=1)
+
+    df.drop('genres', axis=1, inplace=True)
+    df.drop('categories', axis=1, inplace=True)
+
+    corr = df.select_dtypes(['number']).T.corr('spearman')  # 'kendall'
+
+    return corr
 
 
 @celery.task(name="tasks.update_database")
@@ -61,8 +189,6 @@ def update_database():
     )
     imdb = IMDB(url=config["imdb"]["url"], api_key=config["imdb"]["apikey"])
     ibm = IBMWatson(url=config["ibm"]["url"], api_key=config["ibm"]["apikey"])
-    textrazor.api_key = config["textrazor"]["apikey"]
-    textrazorclient = textrazor.TextRazor(extractors=["topics"], do_encryption=False)
 
     # Get movies and series from Ororo
     movies = ororo.get(path="movies")["movies"]
@@ -82,7 +208,7 @@ def update_database():
             # Find whether the movie is already in Neo4j
             with neo.session() as session:
                 q = (
-                    """MATCH (m: Movie {imdb_id: "%s"}) 
+                """MATCH (m: Movie {imdb_id: "%s"}) 
                 RETURN m.name, m.imdb_data, m.textrazor_data, m.ibm_data, m.plot;
                 """
                     % imdb_id
@@ -91,8 +217,6 @@ def update_database():
                 if media:
                     if not media[0]["m.imdb_data"]:
                         add_imdb_data(imdb, imdb_id, neo)
-                    # if not media[0]["m.textrazor_data"]:
-                    #     add_textrazor_data(textrazorclient, imdb_id, neo)
                     if not media[0]["m.ibm_data"]:
                         add_ibm_data(ibm, imdb_id, neo)
                     log.info(f'Skipping {media[0]["m.name"]}, already in Neo4j')
@@ -117,6 +241,7 @@ def update_database():
             description: "%s",
             length: %i,
             ororo_link: "%s",
+            poster: "%s",
             imdb_data: false,
             ibm_data: false,
             textrazor_data: false});
@@ -130,15 +255,11 @@ def update_database():
                 item_clean["desc"],
                 int(item_clean["length"]),
                 str(f'https://ororo.tv/en/{media_type}/{item_clean["slug"]}'),
+                item_clean["poster_thumb"]
             )
             queries.append(m)
 
-            if type(item_clean["array_genres"]) != list:
-                genres = [item_clean["array_genres"]]
-            else:
-                genres = item_clean["array_genres"]
-
-            for genre in genres:
+            for genre in item_clean["array_genres"]:
                 g = """MATCH (m: Movie {imdb_id: "%s"})
                 MERGE (g: Genre {name: "%s"})
                 WITH g, m
@@ -149,19 +270,16 @@ def update_database():
                 )
                 queries.append(g)
 
-            for countries in item_clean["array_countries"]:
-                if type(countries) != list:
-                    countries = [countries]
-                for country in countries:
-                    c = """MATCH (m: Movie {imdb_id: "%s"})
+            for country in item_clean["array_countries"]:
+                c = """MATCH (m: Movie {imdb_id: "%s"})
                         MERGE (c: Country {name: "%s"})
                         WITH c, m
                         MERGE (c)-[:HAS_MOVIE]->(m);
                         """ % (
                         f'tt{item_clean["imdb_id"]}',
                         country.strip(),
-                    )
-                    queries.append(c)
+                )
+                queries.append(c)
 
             with neo.session() as session:
                 log.info(f"Uploading {imdb_id} data to Neo4j")
@@ -171,48 +289,6 @@ def update_database():
             # Extra information
             add_imdb_data(imdb, imdb_id, neo)
             add_ibm_data(ibm, imdb_id, neo)
-            # add_textrazor_data(textrazorclient, imdb_id, neo)
-
-
-def add_textrazor_data(textrazor_client, imdb_id, neo4jclient):
-    with neo4jclient.session() as session:
-        q = (
-            """MATCH (m: Movie {imdb_id: "%s"}) 
-        RETURN m.textrazor_data, m.plot, m.description;
-        """
-            % imdb_id
-        )
-        data_flag = session.run(q).data()
-        if data_flag[0]["m.textrazor_data"]:
-            return
-        else:
-            try:
-                text = data_flag[0]["m.plot"] + data_flag[0]["m.description"]
-            except TypeError:
-                text = data_flag[0]["m.description"]
-    queries = []
-    try:
-        log.info(f"Getting Textrazor data for {imdb_id}")
-        topics = textrazor_client.analyze(text).topics()
-        for t in topics:
-            if t.score > 0.75:
-                q = """MATCH (m: Movie {imdb_id: "%s"})
-                SET m.textrazor_data = true
-                MERGE (t: Topic {name: "%s"})
-                WITH m, t
-                MERGE (t)-[r:HAS_MOVIE]->(m)
-                SET r.score = %f;
-                """ % (
-                    imdb_id,
-                    cypher_escape(t.label.lower().strip()),
-                    t.score,
-                )
-                queries.append(q)
-        with neo4jclient.session() as session:
-            for q in queries:
-                session.run(q)
-    except textrazor.TextRazorAnalysisException:
-        log.warning(f"Cannot get textrazor info for {imdb_id}")
 
 
 def add_ibm_data(ibm_client, imdb_id, neo4jclient):
@@ -258,8 +334,8 @@ def add_ibm_data(ibm_client, imdb_id, neo4jclient):
                             WITH c, n
                             MERGE (n)-[:HAS_SUBCATEGORY]->(c)
                             """ % (
-                                cypher_escape(category),
                                 cypher_escape(categories[i - 1]),
+                                cypher_escape(category),
                             )
                         queries.append(q)
                     for category in categories[1:]:
@@ -337,26 +413,28 @@ def add_imdb_data(imdb_client, imdb_id, neo4jclient):
                 queries.append(g)
         if "Actors" in imdb_data.keys():
             for actor in imdb_data["Actors"].split(","):
-                g = """MATCH (m: Movie {imdb_id: "%s"})
-                MERGE (p: Person {name: "%s"})
-                WITH p, m
-                MERGE (p)-[:ACTED_IN]->(m);
-                """ % (
-                    imdb_id,
-                    actor.lower().strip(),
-                )
-                queries.append(g)
+                if actor != 'n/a':
+                    g = """MATCH (m: Movie {imdb_id: "%s"})
+                    MERGE (p: Person {name: "%s"})
+                    WITH p, m
+                    MERGE (p)-[:ACTED_IN]->(m);
+                    """ % (
+                        imdb_id,
+                        actor.lower().strip(),
+                    )
+                    queries.append(g)
         if "Director" in imdb_data.keys():
             for director in imdb_data["Director"].split(","):
-                g = """MATCH (m: Movie {imdb_id: "%s"})
-                MERGE (p: Person {name: "%s"})
-                WITH p, m
-                MERGE (p)-[:DIRECTED]->(m);
-                """ % (
-                    imdb_id,
-                    director.lower().strip(),
-                )
-                queries.append(g)
+                if director != 'n/a':
+                    g = """MATCH (m: Movie {imdb_id: "%s"})
+                    MERGE (p: Person {name: "%s"})
+                   WITH p, m
+                    MERGE (p)-[:DIRECTED]->(m);
+                    """ % (
+                        imdb_id,
+                        director.lower().strip(),
+                    )
+                    queries.append(g)
         with neo4jclient.session() as session:
             for q in queries:
                 session.run(q)

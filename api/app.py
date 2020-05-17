@@ -17,8 +17,8 @@ app = Flask(__name__)
 
 # Parameters
 warnings.filterwarnings("ignore")
-plt.rcParams["figure.figsize"] = (5, 5)
 app.config["UPLOAD_FOLDER"] = os.path.join("static", "plots")
+app.static_folder = "static"
 matplotlib.use("agg")
 
 # Logging
@@ -107,16 +107,23 @@ def update_db():
     celery.send_task("tasks.update_database")
     return redirect(url_for("home"))
 
+@app.route("/similarity")
+def similarity():
+    celery.send_task("tasks.find_similarities")
+    return redirect(url_for("home"))
 
 @app.route("/media/details")
 def get_media():
     title = unquote(request.args.get("slug"))
     with neo.session() as s:
         response = (
-            s.run("MATCH (m:Movie {slug: '%s'}) RETURN m" % title).single().value()
+            s.run("MATCH (m:Movie {slug: '%s'}) RETURN m as movie" % title).single().value()
         )
+        similar = s.run("MATCH (m:Movie {slug: '%s'}) OPTIONAL MATCH (m)-[:SIMILAR]-(om:Movie) WITH om ORDER BY om.imdb_rating DESC RETURN collect({slug: om.slug, title: om.name}) as similar" % title).values()
+        similar = similar[0][0]
+
     filename = emotions_chart(response)
-    return render_template("media_details.html", media=response, plot=filename)
+    return render_template("media_details.html", media=response, similar=similar, plot=filename)
 
 
 @app.route("/actors")
@@ -190,7 +197,7 @@ def categories_media():
 @app.route("/genres")
 def genres():
     with neo.session() as s:
-        genres = s.run("MATCH (g:Genre) RETURN DISTINCT g.name").values()
+        genres = s.run("MATCH (g:Genre) RETURN DISTINCT g.name ORDER BY g.name").values()
         genres = [item for sublist in genres for item in sublist]
     return render_template("genres.html", genres=genres)
 
@@ -221,13 +228,18 @@ def emotions_chart(media):
     emotions = ["sadness", "anger", "joy", "disgust", "fear"]
     N = len(emotions)
 
-    values = [media[emotion] for emotion in emotions]
+    try:
+        values = [media[emotion] for emotion in emotions]
+    except KeyError:
+        return
+
     values.append(values[0])
 
     angles = [n / float(N) * 2 * pi for n in range(N)]
     angles += angles[:1]
 
-    ax = plt.subplot(111, polar=True)
+    fig = plt.figure(figsize=(3,3))
+    ax = fig.add_subplot(111, polar=True)
     plt.xticks(angles[:-1], emotions, color="grey", size=12)
     ax.set_rlabel_position(0)
     plt.yticks([0.25, 0.5, 0.75], ["0.25", "0.5", "0.75"], color="grey", size=9)
