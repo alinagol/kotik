@@ -1,30 +1,20 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <link rel="shortcut icon" href="">
-    <title>Directors</title>
-    <style> img {width: 5%;} </style>
-<link rel="stylesheet" type= "text/css" href="{{ url_for('static', filename='css/style.css') }}" >
-</head>
-<body>
-     <form action="/directors/media">
-
-         <select name="director">
-             {% for director in directors %}
-              <option value="{{director}}"> {{ director }} </option>
-             {% endfor %}
-         </select>
-
-
-         <input type="submit" value="Submit"> <br>
-     </form>
-     <hr>
- <form>
-     <input type="button" value="Back" onclick="history.back()">
-     <input type="button" value="Home" onclick="window.location.href='/'" />
-  </form>
-
-
-</body>
-</html>
+{% extends "layout.html" %}
+{% block title %} Directors {% endblock %}
+{% block head %}
+  {{ super() }}
+{% endblock %}
+{% block content %}
+<h1> Directors </h1>
+<div class="container-fluid">
+    <div class="row-fluid">
+        <form action="/directors/media">
+            <select name="director">
+                {% for director in directors %}
+                <option value="{{director}}"> {{ director }} </option>
+                {% endfor %}
+            </select>
+            <input type="submit" value="Submit"> <br>
+        </form>
+    </div>
+</div>
+{% endblock %}

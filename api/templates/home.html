@@ -1,33 +1,33 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <link rel="shortcut icon" href="">
-    <title>Ororo Recommendation System</title>
-    <style> img {width: 25%;} </style>
-<link rel="stylesheet" type= "text/css" href="{{ url_for('static', filename='css/style.css') }}" >
-</head>
-<body>
+{% extends "layout.html" %}
+{% block title %} Kotik ORORO {% endblock %}
+{% block head %}
+  {{ super() }}
+{% endblock %}
+{% block content %}
 
-    <h1> Ororo Recommendation System </h1>
+<h1> Home </h1>
+<div class="container-fluid">
+    <div class="row-fluid">
+        <div class="span4">
+            <p> Movies in database: {{ count }} </p>
 
-    <h4> Movies in database: {{ count }} </h4>
+            <form action="/update">
+                <input type="submit" value="Refresh Database"/>
+            </form>
 
-<div>
-    <p><a href="/choose">Choose a movie</a></p>
-    <p><a href="/genres">Genres</a></p>
-    <p><a href="/categories">Categories</a></p>
-    <p><a href="/actors">Actors</a></p>
-    <p><a href="/directors">Directors</a></p>
+            <form action="/similarity">
+                <input type="submit" value="Find similarities"/>
+            </form>
+        </div>
+
+        <div class="span8">
+            <p><a href="/choose">Choose a movie</a></p>
+            <p><a href="/genres">Genres</a></p>
+            <p><a href="/categories">Categories</a></p>
+            <p><a href="/actors">Actors</a></p>
+            <p><a href="/directors">Directors</a></p>
+
+        </div>
+    </div>
 </div>
-
-    <form action="/update">
-        <input type="submit" value="Refresh Database"/>
-    </form>
-
-    <form action="/similarity">
-        <input type="submit" value="Find similarities"/>
-    </form>
-
-</body>
-</html>
+{% endblock %}

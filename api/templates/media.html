@@ -1,25 +1,17 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <link rel="shortcut icon" href="">
-    <title>Media</title>
-    <style> img {width: 5%;} </style>
-<link rel="stylesheet" type= "text/css" href="{{ url_for('static', filename='css/style.css') }}" >
-</head>
-<body>
-     <form action="/media/details">
+{% extends "layout.html" %}
+{% block title %} Kotik ORORO - Media {% endblock %}
+{% block head %}
+  {{ super() }}
+{% endblock %}
+{% block content %}
 
-         Title: <input name="title"> <br>
-
-         <input type="submit" value="Submit"> <br>
+<h1> Media </h1>
+<div class="container-fluid">
+    <div class="row-fluid">
+        <form action="/media/details">
+            Title: <input name="title"> <br>
+            <input type="submit" value="Submit"> <br>
      </form>
-     <hr>
- <form>
-     <input type="button" value="Back" onclick="history.back()">
-     <input type="button" value="Home" onclick="window.location.href='/'" />
-  </form>
-
-
-</body>
-</html>
+    </div>
+</div>
+{% endblock %}

@@ -1,31 +1,22 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <link rel="shortcut icon" href="">
-    <title>Categories</title>
-    <style> img {width: 5%;} </style>
-<link rel="stylesheet" type= "text/css" href="{{ url_for('static', filename='css/style.css') }}" >
-</head>
-
-<h2> Movies by {{ director }} </h2>
-<body>
-
-    <ul>
-        {% for m in media %}
+{% extends "layout.html" %}
+{% block title %} Directors {% endblock %}
+{% block head %}
+  {{ super() }}
+{% endblock %}
+{% block content %}
+<h1> Movies by {{ director }}  </h1>
+<div class="container-fluid">
+    <div class="row-fluid">
+        <ul>
+            {% for m in media %}
             <li>
                 <form action="../media/details">
                     <input type="hidden" name="slug"  value="{{ m.slug }}">
                     <input type="submit" value="{{ m.title }} " style="background-color: white; color: #0088cc; width: 100%; text-align: left">
                 </form>
             </li>
-        {% endfor %}
-    </ul>
-
-    <hr>
-    <form>
-        <input type="button" value="Back" onclick="history.back()">
-        <input type="button" value="Home" onclick="window.location.href='/'" />
-    </form>
-</body>
-</html>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+{% endblock %}

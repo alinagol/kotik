@@ -5,11 +5,13 @@ services:
       context: ./api
       dockerfile: Dockerfile
     restart: always
-    ports:
-     - "5001:5001"
+    expose:
+     - 5001
     depends_on:
       - redis
       - neo4j
+    volumes:
+      - static_volume:/app/static
   neo4j:
     image: neo4j:latest
     environment:
@@ -28,6 +30,17 @@ services:
       - neo4j
   redis:
     image: redis
-
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - 1337:80
+    depends_on:
+      - web
+    volumes:
+      - static_volume:/app/static
 volumes:
   db:
+  static_volume:

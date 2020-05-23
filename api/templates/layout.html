@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+
+  <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no">
+    {% block head %}
+      <link rel="stylesheet" media="screen" href="{{ url_for('static', filename='css/bootstrap.min.css') }}">
+      <title>{% block title %}{% endblock %} - Kotik </title>
+    {% endblock %}
+  </head>
+
+  <body>
+    <div id="content">{% block content %}{% endblock %}</div>
+    <div id="footer">
+      {% block footer %}
+        <form>
+            <input type="button" value="Refresh" onclick="window.location.reload();">
+            <input type="button" value="Back" onclick="history.back()">
+            <input type="button" value="Home" onclick="window.location.href='/'" />
+        </form>
+      {% endblock %}
+    </div>
+  </body>
+</html>

@@ -1,61 +1,46 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <link rel="shortcut icon" href="">
-    <title>Media</title>
-<link rel="stylesheet" type= "text/css" href="{{url_for('static', filename='css/style.css')}}" >
-</head>
-<body>
+{% extends "layout.html" %}
+{% block title %} {{ media.name }} {% endblock %}
+{% block head %}
+  {{ super() }}
+{% endblock %}
+{% block content %}
 
 <h1> <a href="{{ media.ororo_link }}"> {{ media.name }} {{ media.year }} </a> </h1>
+<div class="container-fluid">
+    <div class="row-fluid">
+        <div class="span4">
 
-<div class="row">
+            <p> Rating: {{ media.imdb_rating }} </p>
 
-    <div class="column">
-    <p> Rating: {{ media.imdb_rating }} </p>
-    <p> {{ media.plot }} </p>
+            <figure>
+                <img src="{{ media.poster }}" alt="Poster">
+            </figure>
+
+            {% if plot is defined and plot|length %}
+            <figure>
+                <img src=" ../{{ plot }}" alt="Plot">
+            </figure>
+            {% endif %}
+        </div>
+
+        <div class="span8">
+            <p> {{ media.plot }} </p>
+
+            <h3> Similar movies </h3>
+            <ul>
+                {% for m in similar %}
+                {% if m.slug is defined %}
+                <li>
+                    <form action="../media/details">
+                        <input type="hidden" name="slug"  value="{{ m.slug }}">
+                        <input type="submit" value="{{ m.title }} " style="background-color: white; color: #0088cc; width: 100%; text-align: left">
+                    </form>
+                </li>
+                {% endif %}
+                {% endfor %}
+            </ul>
+
+        </div>
     </div>
-
-    <div class="column">
-        <img src="{{ media.poster }}" alt="Poster">
-    </div>
-
-    {% if plot is defined and plot|length %}
-    <div class="column">
-<figure>
-<img src=" ../{{ plot }}" alt="Plot">
-</figure>
 </div>
-    {% endif %}
-
-</div>
-
-<div>
-    <h3> Similar movies </h3>
-    <ul>
-       {% for m in similar %}
-       {% if m.slug is defined %}
-       <li>
-           <form action="../media/details">
-                    <input type="hidden" name="slug"  value="{{ m.slug }}">
-                    <input type="submit" value="{{ m.title }} " style="background-color: white; color: #0088cc; width: 100%; text-align: left">
-           </form>
-       </li>
-        {% endif %}
-       {% endfor %}
-    </ul>
-</div>
-
-<hr>
-
-     <form>
-
-     <input type="button" value="Refresh" onclick="window.location.reload();">
-     <input type="button" value="Back" onclick="history.back()">
-         <input type="button" value="Home" onclick="window.location.href='/'" />
-     </form>
-
-</body>
-</html>
-
+{% endblock %}

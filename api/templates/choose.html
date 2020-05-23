@@ -1,59 +1,44 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <link rel="shortcut icon" href="">
-    <title>Choose</title>
-    <style> img {width: 5%;} </style>
-<link rel="stylesheet" type= "text/css" href="{{ url_for('static', filename='css/style.css') }}" >
-</head>
-<body>
-     <form action="/choose/results">
-
-         Type:<br>
-         <select name="type">
-             <option value="" selected> ANY </option>
-             <option value="movies"> movies </option>
-             <option value="shows"> shows </option>
-         </select>
-
-         <br>
-
-         Genres:<br>
-         <select multiple name="genres">
-             <option value="" selected> ANY </option>
-             {% for genre in genres %}
-              <option value="{{genre}}"> {{ genre }} </option>
-             {% endfor %}
-         </select>
-         <br>
-
-         Categories:<br>
-         <select multiple name="categories">
-             <option value="" selected> ANY </option>
-             {% for category in categories %}
-              <option value="{{category}}"> {{ category }} </option>
-             {% endfor %}
-         </select>
-         <br>
-
-         Rating:<br>
-             <input type="number" name="rating" min="1" max="10" value="">
-         <br>
-
-         Year:<br>
-             <input type="number" name="year" min="0" max="2020" value="">
-         <br>
-         <br>
-
-         <input type="submit" value="Submit"> <br>
+{% extends "layout.html" %}
+{% block title %} Select {% endblock %}
+{% block head %}
+  {{ super() }}
+{% endblock %}
+{% block content %}
+<h1> Select a movie </h1>
+<div class="container-fluid">
+    <div class="row-fluid">
+        <form action="/choose/results">
+            Type:<br>
+            <select name="type">
+                <option value="" selected> ANY </option>
+                <option value="movies"> movies </option>
+                <option value="shows"> shows </option>
+            </select>
+            <br>
+            Genres:<br>
+            <select multiple name="genres">
+                <option value="" selected> ANY </option>
+                {% for genre in genres %}
+                <option value="{{genre}}"> {{ genre }} </option>
+                {% endfor %}
+            </select>
+            <br>
+            Categories:<br>
+            <select multiple name="categories">
+                <option value="" selected> ANY </option>
+                {% for category in categories %}
+                <option value="{{category}}"> {{ category }} </option>
+                {% endfor %}
+            </select>
+            <br>
+            Rating:<br>
+            <input type="number" name="rating" min="1" max="10" value="">
+            <br>
+            Year:<br>
+            <input type="number" name="year" min="0" max="2020" value="">
+            <br>
+            <input type="submit" value="Submit"> <br>
      </form>
-     <hr>
- <form>
-     <input type="button" value="Back" onclick="history.back()">
-     <input type="button" value="Home" onclick="window.location.href='/'" />
-  </form>
-
-
-</body>
-</html>
+    </div>
+</div>
+{% endblock %}

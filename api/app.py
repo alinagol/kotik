@@ -5,7 +5,7 @@ import os
 from urllib.parse import unquote
 import warnings
 
-from flask import Flask, request, render_template, redirect, url_for
+from flask import Flask, request, render_template, redirect, url_for, jsonify
 import matplotlib
 import matplotlib.pyplot as plt
 from neo4j import GraphDatabase
@@ -18,7 +18,7 @@ app = Flask(__name__)
 # Parameters
 warnings.filterwarnings("ignore")
 app.config["UPLOAD_FOLDER"] = os.path.join("static", "plots")
-app.static_folder = "static"
+
 matplotlib.use("agg")
 
 # Logging
@@ -35,6 +35,11 @@ with open("config.json") as f:
 neo = GraphDatabase.driver(config["neo4j"]["url"], encrypted=False)
 
 # Endpoints
+@app.route("/config")
+def config():
+    return jsonify(app.config())
+
+
 @app.route("/")
 def home():
     with neo.session() as s:
@@ -107,10 +112,12 @@ def update_db():
     celery.send_task("tasks.update_database")
     return redirect(url_for("home"))
 
+
 @app.route("/similarity")
 def similarity():
     celery.send_task("tasks.find_similarities")
     return redirect(url_for("home"))
+
 
 @app.route("/media/details")
 def get_media():
@@ -242,7 +249,7 @@ def emotions_chart(media):
     ax = fig.add_subplot(111, polar=True)
     plt.xticks(angles[:-1], emotions, color="grey", size=12)
     ax.set_rlabel_position(0)
-    plt.yticks([0.25, 0.5, 0.75], ["0.25", "0.5", "0.75"], color="grey", size=9)
+    plt.yticks([0.25, 0.5, 0.75], ["0.25", "0.5", "0.75"], color="grey", size=8)
     plt.ylim(0, 1)
     ax.plot(angles, values, linewidth=1, linestyle="solid")
     ax.fill(angles, values, "b", alpha=0.1)

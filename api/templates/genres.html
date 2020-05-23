@@ -1,29 +1,20 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <link rel="shortcut icon" href="">
-    <title>Genres</title>
-    <style> img {width: 5%;} </style>
-<link rel="stylesheet" type= "text/css" href="{{ url_for('static', filename='css/style.css') }}" >
-</head>
-<body>
-     <form action="/genres/media">
-
-         <select name="genre">
-             {% for genre in genres %}
-              <option value="{{genre}}"> {{ genre }} </option>
-             {% endfor %}
-         </select>
-
-         <input type="submit" value="Submit"> <br>
-     </form>
-     <hr>
- <form>
-     <input type="button" value="Back" onclick="history.back()">
-     <input type="button" value="Home" onclick="window.location.href='/'" />
-  </form>
-
-
-</body>
-</html>
+{% extends "layout.html" %}
+{% block title %} Genres {% endblock %}
+{% block head %}
+  {{ super() }}
+{% endblock %}
+{% block content %}
+<h1> Genres </h1>
+<div class="container-fluid">
+    <div class="row-fluid">
+        <form action="/genres/media">
+            <select name="genre">
+                {% for genre in genres %}
+                <option value="{{genre}}"> {{ genre }} </option>
+                {% endfor %}
+            </select>
+            <input type="submit" value="Submit"> <br>
+        </form>
+    </div>
+</div>
+{% endblock %}
