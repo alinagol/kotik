@@ -98,7 +98,7 @@ def choose_results():
                     'MATCH (m)<-[:HAS_MOVIE]-(:Category {name: "%s"})\n'
                     % unquote(category)
                 )
-    queries.append("RETURN {title: m.name, slug: m.slug, poster: m.poster, description: m.description} ORDER BY m.imdb_rating DESC")
+    queries.append("RETURN {title: m.name, slug: m.slug, poster: m.poster, description: m.description, rating: m.imdb_rating} ORDER BY m.imdb_rating DESC")
 
     q = " ".join(queries)
 
@@ -124,14 +124,20 @@ def similarity():
 def get_media():
     title = unquote(request.args.get("slug"))
     with neo.session() as s:
-        response = (
+        media = (
             s.run("MATCH (m:Movie {slug: '%s'}) RETURN m as movie" % title).single().value()
         )
+        categories = s.run("MATCH (m:Movie {slug: '%s'})<-[:HAS_MOVIE]-(c:Category) RETURN DISTINCT c.name" % title).values()
+        genres = s.run("MATCH (m:Movie {slug: '%s'})<-[:HAS_MOVIE]-(g:Genre) RETURN DISTINCT g.name" % title).values()
+
+        categories = [item for sublist in categories for item in sublist]
+        genres = [item for sublist in genres for item in sublist]
+
         similar = s.run("MATCH (m:Movie {slug: '%s'}) OPTIONAL MATCH (m)-[:SIMILAR]-(om:Movie) WITH om ORDER BY om.imdb_rating DESC RETURN collect({slug: om.slug, title: om.name, poster: om.poster, description: om.description, rating: om.imdb_rating}) as similar" % title).values()
         similar = similar[0][0]
 
-    filename = emotions_chart(response)
-    return render_template("media_details.html", media=response, similar=similar, plot=filename)
+    filename = emotions_chart(media)
+    return render_template("media_details.html", media=media, genres=genres, categories=categories, similar=similar, plot=filename)
 
 
 @app.route("/actors")

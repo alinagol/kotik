@@ -22,6 +22,21 @@
                 <img src=" ../{{ plot }}" alt="Plot">
             </figure>
             {% endif %}
+
+            {% if categories is defined and categories|length %}
+            <h6>Categories</h6>
+            <ul class="list-group list-group-flush">
+                {% for c in categories %}
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <form action="../categories/media">
+                        <input type="hidden" name="categories"  value="{{ c }}">
+                        <input class="btn btn-link" type="submit" value="{{ c }} " style="background-color: white; color: #0088cc; width: 100%; text-align: left">
+                    </form>
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
         </div>
 
         <div class="col-8">

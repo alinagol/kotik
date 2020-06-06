@@ -5,48 +5,44 @@
 {% endblock %}
 {% block navbar %}Select a Movie{% endblock %}
 {% block content %}
-<div class="container-fluid">
-    <div class="row-fluid">
-        <form action="/choose/results">
-            <div class="form-group">
-                <label for="TypeSelect">Type</label>
-                <select name="type" class="form-control" id="TypeSelect">
-                    <option value="" selected> ANY </option>
-                    <option value="movies"> movies </option>
-                    <option value="shows"> shows </option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label for="GenreSelect">Genres</label>
-                <select multiple class="form-control" id="GenreSelect">
-                    <option value=""> ANY </option>
-                    {% for genre in genres %}
-                    <option value="{{genre}}"> {{ genre }} </option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="form-group">
-                <label for="CategorySelect">Categories</label>
-                <select multiple class="form-control" id="CategorySelect">
-                    <option value=""> ANY </option>
-                    {% for category in categories %}
-                    <option value="{{category}}"> {{ category }} </option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="form-group">
-                <label for="RatingSelect">Rating (more than)</label>
-                <input type="range" class="form-control-range" id="RatingSelect" min="0" max="10" step="0.5" oninput="RatingSelectDisplay.value = RatingSelect.value">
-                <output id="RatingSelectDisplay"></output>
-            </div>
-            <div class="form-group">
-                <label for="YearSelect">Year (later than)</label>
-                <input type="range" class="form-control-range" id="YearSelect" min="1900" max="2020" step="1" oninput="YearSelectDisplay.value = YearSelect.value">
-                <output id="YearSelectDisplay"></output>
-            </div>
-
-            <button type="submit" class="btn btn-primary">Submit</button>
-     </form>
+<form action="/choose/results">
+    <div class="form-group">
+        <label for="TypeSelect">Type</label>
+        <select name="type" class="form-control" id="TypeSelect">
+            <option value="" selected> ANY </option>
+            <option value="movies"> movies </option>
+            <option value="shows"> shows </option>
+        </select>
     </div>
-</div>
+    <div class="form-group">
+        <label for="GenreSelect">Genres</label>
+        <select multiple class="form-control" id="GenreSelect" name="genres">
+            <option value="" selected> ANY </option>
+            {% for genre in genres %}
+            <option value="{{genre}}"> {{ genre }} </option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="form-group">
+        <label for="CategorySelect">Categories</label>
+        <select multiple class="form-control" id="CategorySelect" name="categories">
+            <option value="" selected> ANY </option>
+            {% for category in categories %}
+            <option value="{{category}}"> {{ category }} </option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="form-group">
+        <label for="RatingSelect">Rating (more than)</label>
+        <input type="range" class="form-control-range" id="RatingSelect" min="0" max="10" step="0.5" oninput="RatingSelectDisplay.value = RatingSelect.value" name="rating">
+        <output id="RatingSelectDisplay"></output>
+    </div>
+    <div class="form-group">
+        <label for="YearSelect">Year (later than)</label>
+        <input type="range" class="form-control-range" id="YearSelect" min="1900" max="2020" step="1" oninput="YearSelectDisplay.value = YearSelect.value" name="year">
+        <output id="YearSelectDisplay"></output>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Submit</button>
+</form>
 {% endblock %}
