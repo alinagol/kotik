@@ -4,14 +4,9 @@
   {{ super() }}
 {% endblock %}
 {% block content %}
-
-<h1> Media </h1>
-<div class="container-fluid">
-    <div class="row-fluid">
-        <form action="/media/details">
-            Title: <input name="title"> <br>
-            <input type="submit" value="Submit"> <br>
-     </form>
-    </div>
-</div>
+<form action="/media/details" class="form-inline">
+    <label class="sr-only" for="TitleSelect">Title</label>
+    <input type="text" name="title" class="form-control mb-2 mr-sm-2" id="TitleSelect" placeholder="Title">
+    <button type="submit" class="btn btn-primary">Submit</button>
+</form>
 {% endblock %}

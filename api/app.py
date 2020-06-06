@@ -34,6 +34,7 @@ with open("config.json") as f:
 # Database
 neo = GraphDatabase.driver(config["neo4j"]["url"], encrypted=False)
 
+
 # Endpoints
 @app.route("/config")
 def config():
@@ -97,14 +98,14 @@ def choose_results():
                     'MATCH (m)<-[:HAS_MOVIE]-(:Category {name: "%s"})\n'
                     % unquote(category)
                 )
-    queries.append("RETURN {title: m.name, slug: m.slug} ORDER BY m.imdb_rating DESC")
+    queries.append("RETURN {title: m.name, slug: m.slug, poster: m.poster, description: m.description} ORDER BY m.imdb_rating DESC")
 
     q = " ".join(queries)
 
     with neo.session() as s:
         media = s.run(q).values()
         media = [item for sublist in media for item in sublist]
-    return render_template("choose_results.html", media=media, filters=request.args)
+    return render_template("media_list.html", media=media, filter=request.args)
 
 
 @app.route("/update")
@@ -126,7 +127,7 @@ def get_media():
         response = (
             s.run("MATCH (m:Movie {slug: '%s'}) RETURN m as movie" % title).single().value()
         )
-        similar = s.run("MATCH (m:Movie {slug: '%s'}) OPTIONAL MATCH (m)-[:SIMILAR]-(om:Movie) WITH om ORDER BY om.imdb_rating DESC RETURN collect({slug: om.slug, title: om.name}) as similar" % title).values()
+        similar = s.run("MATCH (m:Movie {slug: '%s'}) OPTIONAL MATCH (m)-[:SIMILAR]-(om:Movie) WITH om ORDER BY om.imdb_rating DESC RETURN collect({slug: om.slug, title: om.name, poster: om.poster, description: om.description, rating: om.imdb_rating}) as similar" % title).values()
         similar = similar[0][0]
 
     filename = emotions_chart(response)
@@ -140,19 +141,19 @@ def actors():
             "MATCH (p:Person)-[:ACTED_IN]->(:Movie) RETURN DISTINCT p.name ORDER BY p.name"
         ).values()
         actors = [item for sublist in actors for item in sublist]
-    return render_template("actors.html", actors=actors)
+    return render_template("media_filter.html", filter="actors", items=actors)
 
 
 @app.route("/actors/media")
 def actors_media():
-    actor = unquote(request.args.get("actor"))
+    actor = unquote(request.args.get("actors"))
     with neo.session() as s:
         media = s.run(
-            'MATCH (p:Person {name: "%s"})-[:ACTED_IN]->(m:Movie) RETURN {title: m.name, slug: m.slug}'
+            'MATCH (p:Person {name: "%s"})-[:ACTED_IN]->(m:Movie) RETURN {title: m.name, slug: m.slug, poster: m.poster, description: m.description, rating: m.imdb_rating} ORDER BY m.imdb_rating DESC'
             % actor
         ).values()
         media = [item for sublist in media for item in sublist]
-    return render_template("actors_media.html", actor=actor.capitalize(), media=media)
+    return render_template("media_list.html", filter=actor.capitalize(), media=media)
 
 
 @app.route("/directors")
@@ -162,20 +163,20 @@ def directors():
             "MATCH (p:Person)-[:DIRECTED]->(:Movie) RETURN DISTINCT p.name ORDER BY p.name"
         ).values()
         directors = [item for sublist in directors for item in sublist]
-    return render_template("directors.html", directors=directors)
+    return render_template("media_filter.html", filter="directors", items=directors)
 
 
 @app.route("/directors/media")
 def directors_media():
-    director = unquote(request.args.get("director"))
+    director = unquote(request.args.get("directors"))
     with neo.session() as s:
         media = s.run(
-            'MATCH (p:Person {name: "%s"})-[:DIRECTED]->(m:Movie) RETURN {title: m.name, slug: m.slug}'
+            'MATCH (p:Person {name: "%s"})-[:DIRECTED]->(m:Movie) RETURN {title: m.name, slug: m.slug, poster: m.poster, description: m.description, rating: m.imdb_rating} ORDER BY m.imdb_rating DESC'
             % director
         ).values()
         media = [item for sublist in media for item in sublist]
     return render_template(
-        "directors_media.html", director=director.capitalize(), media=media
+        "media_list.html", filter=director.capitalize(), media=media
     )
 
 
@@ -186,19 +187,19 @@ def categories():
             "MATCH (c:Category) RETURN DISTINCT c.name ORDER BY c.name"
         ).values()
         categories = [item for sublist in categories for item in sublist]
-    return render_template("categories.html", categories=categories)
+    return render_template("media_filter.html", filter="categories", items=categories)
 
 
 @app.route("/categories/media")
 def categories_media():
-    category = unquote(request.args.get("category"))
+    category = unquote(request.args.get("categories"))
     with neo.session() as s:
         media = s.run(
-            'MATCH (c:Category {name: "%s"})-[:HAS_MOVIE]->(m:Movie) RETURN {title: m.name, slug: m.slug} ORDER BY m.imdb_rating DESC'
+            'MATCH (c:Category {name: "%s"})-[:HAS_MOVIE]->(m:Movie) RETURN {title: m.name, slug: m.slug, poster: m.poster, description: m.description, rating: m.imdb_rating} ORDER BY m.imdb_rating DESC'
             % category
         ).values()
         media = [item for sublist in media for item in sublist]
-    return render_template("categories_media.html", category=category, media=media)
+    return render_template("media_list.html", filter=category, media=media)
 
 
 @app.route("/genres")
@@ -206,19 +207,19 @@ def genres():
     with neo.session() as s:
         genres = s.run("MATCH (g:Genre) RETURN DISTINCT g.name ORDER BY g.name").values()
         genres = [item for sublist in genres for item in sublist]
-    return render_template("genres.html", genres=genres)
+    return render_template("media_filter.html", filter="genres", items=genres)
 
 
 @app.route("/genres/media")
 def genres_media():
-    genre = unquote(request.args.get("genre"))
+    genre = unquote(request.args.get("genres"))
     with neo.session() as s:
         media = s.run(
-            'MATCH (g:Genre {name: "%s"})-[:HAS_MOVIE]->(m:Movie) RETURN {title: m.name, slug: m.slug} ORDER BY m.imdb_rating DESC'
+            'MATCH (g:Genre {name: "%s"})-[:HAS_MOVIE]->(m:Movie) RETURN {title: m.name, slug: m.slug, description: m.description, poster: m.poster, rating: m.imdb_rating} ORDER BY m.imdb_rating DESC'
             % genre
         ).values()
         media = [item for sublist in media for item in sublist]
-    return render_template("genres_media.html", genre=genre, media=media)
+    return render_template("media_list.html", filter=genre, media=media)
 
 
 @app.errorhandler(404)

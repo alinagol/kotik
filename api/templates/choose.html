@@ -3,41 +3,49 @@
 {% block head %}
   {{ super() }}
 {% endblock %}
+{% block navbar %}Select a Movie{% endblock %}
 {% block content %}
-<h1> Select a movie </h1>
 <div class="container-fluid">
     <div class="row-fluid">
         <form action="/choose/results">
-            Type:<br>
-            <select name="type">
-                <option value="" selected> ANY </option>
-                <option value="movies"> movies </option>
-                <option value="shows"> shows </option>
-            </select>
-            <br>
-            Genres:<br>
-            <select multiple name="genres">
-                <option value="" selected> ANY </option>
-                {% for genre in genres %}
-                <option value="{{genre}}"> {{ genre }} </option>
-                {% endfor %}
-            </select>
-            <br>
-            Categories:<br>
-            <select multiple name="categories">
-                <option value="" selected> ANY </option>
-                {% for category in categories %}
-                <option value="{{category}}"> {{ category }} </option>
-                {% endfor %}
-            </select>
-            <br>
-            Rating:<br>
-            <input type="number" name="rating" min="1" max="10" value="">
-            <br>
-            Year:<br>
-            <input type="number" name="year" min="0" max="2020" value="">
-            <br>
-            <input type="submit" value="Submit"> <br>
+            <div class="form-group">
+                <label for="TypeSelect">Type</label>
+                <select name="type" class="form-control" id="TypeSelect">
+                    <option value="" selected> ANY </option>
+                    <option value="movies"> movies </option>
+                    <option value="shows"> shows </option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="GenreSelect">Genres</label>
+                <select multiple class="form-control" id="GenreSelect">
+                    <option value=""> ANY </option>
+                    {% for genre in genres %}
+                    <option value="{{genre}}"> {{ genre }} </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="CategorySelect">Categories</label>
+                <select multiple class="form-control" id="CategorySelect">
+                    <option value=""> ANY </option>
+                    {% for category in categories %}
+                    <option value="{{category}}"> {{ category }} </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="RatingSelect">Rating (more than)</label>
+                <input type="range" class="form-control-range" id="RatingSelect" min="0" max="10" step="0.5" oninput="RatingSelectDisplay.value = RatingSelect.value">
+                <output id="RatingSelectDisplay"></output>
+            </div>
+            <div class="form-group">
+                <label for="YearSelect">Year (later than)</label>
+                <input type="range" class="form-control-range" id="YearSelect" min="1900" max="2020" step="1" oninput="YearSelectDisplay.value = YearSelect.value">
+                <output id="YearSelectDisplay"></output>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Submit</button>
      </form>
     </div>
 </div>

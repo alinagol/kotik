@@ -4,23 +4,23 @@
   {{ super() }}
 {% endblock %}
 {% block content %}
-
-<h1> Home </h1>
-<div class="container-fluid">
-    <div class="row-fluid">
-        <div class="span4">
+    <div class="row">
+        <div class="col-4">
             <p> Movies in database: {{ count }} </p>
 
-            <form action="/update">
-                <input type="submit" value="Refresh Database"/>
-            </form>
-
-            <form action="/similarity">
-                <input type="submit" value="Find similarities"/>
-            </form>
+            <div class="form-group">
+                <form action="/update">
+                    <input class="btn btn-primary" type="submit" value="Refresh Database"/>
+                </form>
+            </div>
+            <div class="form-group">
+                <form action="/similarity">
+                    <input class="btn btn-primary" type="submit" value="Find similarities"/>
+                </form>
+            </div>
         </div>
 
-        <div class="span8">
+        <div class="col-8">
             <p><a href="/choose">Choose a movie</a></p>
             <p><a href="/genres">Genres</a></p>
             <p><a href="/categories">Categories</a></p>
@@ -29,5 +29,4 @@
 
         </div>
     </div>
-</div>
 {% endblock %}

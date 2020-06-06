@@ -1,0 +1,27 @@
+{% extends "layout.html" %}
+{% block title %} Genres {% endblock %}
+{% block head %}
+  {{ super() }}
+{% endblock %}
+{% block content %}
+<div class="row row-cols-1 row-cols-md-3">
+    {% for m in media %}
+    <div class="col mb-4">
+        <div class="card bg-light mb-3 h-100" style="width: 10rem;">
+            <img src="{{ m.poster }}" class="card-img-top" alt="Poster">
+            <div class="card-body">
+                <h6 class="card-title"> {{ m.title }} </h6>
+                <span class="badge badge-primary badge-pill"> {{ m.rating }} </span>
+            </div>
+            <div class="card-footer">
+                <form action="../media/details">
+                    <input type="hidden" name="slug"  value="{{ m.slug }}">
+                    <button class="btn btn-link stretched-link"> ... </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
+
