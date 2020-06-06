@@ -5,12 +5,14 @@
 {% endblock %}
 {% block navbar %} {{ filter }} {% endblock %}
 {% block content %}
-<form action="/{{ filter }}/media" class="form-inline">
-    <select class="form-control" name="{{ filter }}">
-        {% for item in items %}
-        <option value="{{item}}"> {{ item }} </option>
-        {% endfor %}
-    </select>
+<form action="/{{ filter }}/media">
+    <div class="form-group">
+        <select class="form-control" name="{{ filter }}">
+            {% for item in items %}
+            <option value="{{item}}"> {{ item }} </option>
+            {% endfor %}
+        </select>
+    </div>
     <button type="submit" class="btn btn-primary">Submit</button>
 </form>
 {% endblock %}
