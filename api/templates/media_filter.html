@@ -6,7 +6,7 @@
 {% block navbar %} {{ filter }} {% endblock %}
 {% block content %}
 <form action="/{{ filter }}/media">
-    <div class="form-group">
+    <div class="form-group mx-auto">
         <select class="form-control" name="{{ filter }}">
             {% for item in items %}
             <option value="{{item}}"> {{ item }} </option>

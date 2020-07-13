@@ -1,0 +1,15 @@
+{% extends "layout.html" %}
+{% block title %} Search {% endblock %}
+{% block head %}
+  {{ super() }}
+{% endblock %}
+{% block navbar %} Search {% endblock %}
+{% block content %}
+<form action="/media/details">
+    <div class="form-group">
+        <label for="searchMovie">IMDB id</label>
+        <input type="text" class="form-control" id="searchMovie" name="id">
+    </div>
+    <button type="submit" class="btn btn-primary">Submit</button>
+</form>
+{% endblock %}

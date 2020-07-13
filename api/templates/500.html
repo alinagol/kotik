@@ -1,23 +1,10 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="shortcut icon" href="">
-    <title>500</title>
-    <style> img {width: 5%;} </style>
-      <link rel="stylesheet" media="screen" href="{{ url_for('static', filename='css/bootstrap.min.css') }}">
-</head>
-<body>
-     <a> {{ error }} </a>
-
-     <h4> Received parameters: </h4>
-     <a> {{ params }} </a>
-
-     <form>
-              <input type="button" value="Back" onclick="history.back()">
-
-         <input type="button" value="Home"  onclick="window.location.href='/'" />
-     </form>
-</body>
-</html>
+{% extends "layout.html" %}
+{% block title %} 404 {% endblock %}
+{% block head %}
+  {{ super() }}
+{% endblock %}
+{% block content %}
+<a> Oi oi 500</a>
+<a> {{ error }} </a>
+<a> {{ params }} </a>
+{% endblock %}

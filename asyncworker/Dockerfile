@@ -6,6 +6,7 @@ ENV C_FORCE_ROOT true
 
 COPY ./requirements.txt .
 RUN pip install -r requirements.txt
+RUN python -m nltk.downloader stopwords
 
 COPY . /asyncworker
 WORKDIR /asyncworker

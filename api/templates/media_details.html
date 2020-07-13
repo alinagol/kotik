@@ -6,12 +6,10 @@
 {% block content %}
 
 <div class="container-fluid">
-    <h1> <a href="{{ media.ororo_link }}"> {{ media.name }} {{ media.year }} </a> </h1>
+    <h2> <a href="{{ media.ororo_link }}"> {{ media.name }} </a> <span class="badge badge-pill badge-primary"> {{ media.imdb_rating }} </span> </h2>
 
     <div class="row">
         <div class="col-4">
-
-            <p> Rating: {{ media.imdb_rating }} </p>
 
             <figure>
                 <img src="{{ media.poster }}" alt="Poster">
@@ -45,10 +43,10 @@
             <h3> Similar movies </h3>
             <ul class="list-group">
                 {% for m in similar %}
-                {% if m.slug is defined %}
+                {% if m.id is defined %}
                 <li class="list-group-item d-flex justify-content-between align-items-center">
                     <form action="../media/details">
-                        <input type="hidden" name="slug"  value="{{ m.slug }}">
+                        <input type="hidden" name="id"  value="{{ m.id }}">
                         <input class="btn btn-link" type="submit" value="{{ m.title }} " style="background-color: white; color: #0088cc; width: 100%; text-align: left">
                     </form>
                     <span class="badge badge-primary badge-pill"> {{ m.rating }} </span>

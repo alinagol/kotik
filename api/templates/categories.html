@@ -1,0 +1,32 @@
+{% extends "layout.html" %}
+{% block title %} Categories {% endblock %}
+{% block head %}
+  {{ super() }}
+{% endblock %}
+{% block content %}
+<div class="row row-cols-1 row-cols-md-3">
+    {% for c in subcategories %}
+    <div class="col mb-4">
+        <div class="card" style="width: 18rem;">
+            <ul class="list-group">
+                <li class="list-group-item d-flex justify-content-between align-items-center active">
+                    <form action="../categories/media">
+                        <input type="hidden" name="categories"  value="{{ c.category }}">
+                        <input class="btn btn-link text-white" type="submit" value="{{ c.category }}">
+                    </form>
+                    <span class="badge badge-light badge-pill">{{ c.movies }}</span>
+                </li>
+                {% for sc in c.subcategories %}
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <form action="../categories/media">
+                        <input type="hidden" name="categories"  value="{{ sc }}">
+                        <input class="btn btn-link " type="submit" value="{{ sc }} ">
+                    </form>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

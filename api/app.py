@@ -98,7 +98,7 @@ def choose_results():
                     'MATCH (m)<-[:HAS_MOVIE]-(:Category {name: "%s"})\n'
                     % unquote(category)
                 )
-    queries.append("RETURN {title: m.name, slug: m.slug, poster: m.poster, description: m.description, rating: m.imdb_rating} ORDER BY m.imdb_rating DESC")
+    queries.append("RETURN {title: m.name, id: m.imdb_id, poster: m.poster, description: m.description, rating: m.imdb_rating} ORDER BY m.imdb_rating DESC")
 
     q = " ".join(queries)
 
@@ -120,20 +120,25 @@ def similarity():
     return redirect(url_for("home"))
 
 
+@app.route("/media")
+def search_media():
+    return render_template("media_search.html")
+
+
 @app.route("/media/details")
 def get_media():
-    title = unquote(request.args.get("slug"))
+    id = unquote(request.args.get("id"))
     with neo.session() as s:
         media = (
-            s.run("MATCH (m:Movie {slug: '%s'}) RETURN m as movie" % title).single().value()
+            s.run("MATCH (m:Movie {imdb_id: '%s'}) RETURN m as movie" % id).single().value()
         )
-        categories = s.run("MATCH (m:Movie {slug: '%s'})<-[:HAS_MOVIE]-(c:Category) RETURN DISTINCT c.name" % title).values()
-        genres = s.run("MATCH (m:Movie {slug: '%s'})<-[:HAS_MOVIE]-(g:Genre) RETURN DISTINCT g.name" % title).values()
+        categories = s.run("MATCH (m:Movie {imdb_id: '%s'})<-[:HAS_MOVIE]-(c:Category) RETURN DISTINCT c.name" % id).values()
+        genres = s.run("MATCH (m:Movie {imdb_id: '%s'})<-[:HAS_MOVIE]-(g:Genre) RETURN DISTINCT g.name" % id).values()
 
         categories = [item for sublist in categories for item in sublist]
         genres = [item for sublist in genres for item in sublist]
 
-        similar = s.run("MATCH (m:Movie {slug: '%s'}) OPTIONAL MATCH (m)-[:SIMILAR]-(om:Movie) WITH om ORDER BY om.imdb_rating DESC RETURN collect({slug: om.slug, title: om.name, poster: om.poster, description: om.description, rating: om.imdb_rating}) as similar" % title).values()
+        similar = s.run("MATCH (m:Movie {imdb_id: '%s'}) OPTIONAL MATCH (m)-[:SIMILAR]-(om:Movie) WITH om ORDER BY om.imdb_rating DESC RETURN collect({id: om.imdb_id, title: om.name, poster: om.poster, description: om.description, rating: om.imdb_rating}) as similar" % id).values()
         similar = similar[0][0]
 
     filename = emotions_chart(media)
@@ -155,7 +160,7 @@ def actors_media():
     actor = unquote(request.args.get("actors"))
     with neo.session() as s:
         media = s.run(
-            'MATCH (p:Person {name: "%s"})-[:ACTED_IN]->(m:Movie) RETURN {title: m.name, slug: m.slug, poster: m.poster, description: m.description, rating: m.imdb_rating} ORDER BY m.imdb_rating DESC'
+            'MATCH (p:Person {name: "%s"})-[:ACTED_IN]->(m:Movie) RETURN {title: m.name, id: m.imdb_id, poster: m.poster, description: m.description, rating: m.imdb_rating} ORDER BY m.imdb_rating DESC'
             % actor
         ).values()
         media = [item for sublist in media for item in sublist]
@@ -177,7 +182,7 @@ def directors_media():
     director = unquote(request.args.get("directors"))
     with neo.session() as s:
         media = s.run(
-            'MATCH (p:Person {name: "%s"})-[:DIRECTED]->(m:Movie) RETURN {title: m.name, slug: m.slug, poster: m.poster, description: m.description, rating: m.imdb_rating} ORDER BY m.imdb_rating DESC'
+            'MATCH (p:Person {name: "%s"})-[:DIRECTED]->(m:Movie) RETURN {title: m.name, id: m.imdb_id, poster: m.poster, description: m.description, rating: m.imdb_rating} ORDER BY m.imdb_rating DESC'
             % director
         ).values()
         media = [item for sublist in media for item in sublist]
@@ -185,13 +190,19 @@ def directors_media():
         "media_list.html", filter=director.capitalize(), media=media
     )
 
+@app.route("/categories/subcategories")
+def subcategories():
+    with neo.session() as s:
+        subcategories = s.run(
+            "MATCH (c:Category) WHERE NOT (c)<-[:HAS_SUBCATEGORY]-() MATCH (c:Category)-[:HAS_MOVIE]->(m:Movie) OPTIONAL MATCH (c)-[:HAS_SUBCATEGORY]->(sc:Category) WITH c, sc, count(distinct m) as n ORDER BY n DESC RETURN {category: c.name, subcategories: collect(distinct sc.name), movies: n}"
+        ).values()
+        subcategories = [item for sublist in subcategories for item in sublist]
+    return render_template("categories.html", subcategories=subcategories)
 
 @app.route("/categories")
 def categories():
     with neo.session() as s:
-        categories = s.run(
-            "MATCH (c:Category) RETURN DISTINCT c.name ORDER BY c.name"
-        ).values()
+        categories = s.run("MATCH (c:Category) WHERE NOT (c)<-[:HAS_SUBCATEGORY]-() RETURN DISTINCT c.name ORDER BY c.name").values()
         categories = [item for sublist in categories for item in sublist]
     return render_template("media_filter.html", filter="categories", items=categories)
 
@@ -201,7 +212,7 @@ def categories_media():
     category = unquote(request.args.get("categories"))
     with neo.session() as s:
         media = s.run(
-            'MATCH (c:Category {name: "%s"})-[:HAS_MOVIE]->(m:Movie) RETURN {title: m.name, slug: m.slug, poster: m.poster, description: m.description, rating: m.imdb_rating} ORDER BY m.imdb_rating DESC'
+            'MATCH (c:Category {name: "%s"})-[:HAS_MOVIE]->(m:Movie) RETURN {title: m.name, id: m.imdb_id, poster: m.poster, description: m.description, rating: m.imdb_rating} ORDER BY m.imdb_rating DESC'
             % category
         ).values()
         media = [item for sublist in media for item in sublist]
@@ -221,7 +232,7 @@ def genres_media():
     genre = unquote(request.args.get("genres"))
     with neo.session() as s:
         media = s.run(
-            'MATCH (g:Genre {name: "%s"})-[:HAS_MOVIE]->(m:Movie) RETURN {title: m.name, slug: m.slug, description: m.description, poster: m.poster, rating: m.imdb_rating} ORDER BY m.imdb_rating DESC'
+            'MATCH (g:Genre {name: "%s"})-[:HAS_MOVIE]->(m:Movie) RETURN {title: m.name, id: m.imdb_id, description: m.description, poster: m.poster, rating: m.imdb_rating} ORDER BY m.imdb_rating DESC'
             % genre
         ).values()
         media = [item for sublist in media for item in sublist]
