@@ -119,6 +119,23 @@ def similarity():
     celery.send_task("tasks.find_similarities")
     return redirect(url_for("home"))
 
+@app.route("/rating")
+def best():
+    ratings = ["critics_rating", "audience_score", "imdb_rating", "critics_score", "joy", "disgust", "fear", "anger", "sadness"]
+    return render_template("media_filter.html", filter="rating", items=ratings)
+
+
+@app.route("/rating/media")
+def best_media():
+    rating = unquote(request.args.get("rating"))
+    with neo.session() as s:
+        media = s.run(
+            'MATCH (m:Movie) WHERE m.%s IS NOT NULL WITH m ORDER BY m.%s DESC RETURN {title: m.name, id: m.imdb_id, poster: m.poster, description: m.description, rating: m.%s}'
+            % (rating, rating, rating)
+        ).values()
+        media = [item for sublist in media for item in sublist]
+    return render_template("media_list.html", filter=rating, media=media)
+
 
 @app.route("/media")
 def search_media():
@@ -138,7 +155,7 @@ def get_media():
         categories = [item for sublist in categories for item in sublist]
         genres = [item for sublist in genres for item in sublist]
 
-        similar = s.run("MATCH (m:Movie {imdb_id: '%s'}) OPTIONAL MATCH (m)-[:SIMILAR]-(om:Movie) WITH om ORDER BY om.imdb_rating DESC RETURN collect({id: om.imdb_id, title: om.name, poster: om.poster, description: om.description, rating: om.imdb_rating}) as similar" % id).values()
+        similar = s.run("MATCH (m:Movie {imdb_id: '%s'}) OPTIONAL MATCH (m)-[:SIMILAR]-(om:Movie) WITH om ORDER BY om.imdb_rating DESC RETURN DISTINCT collect({id: om.imdb_id, title: om.name, poster: om.poster, description: om.description, rating: om.imdb_rating}) as similar" % id).values()
         similar = similar[0][0]
 
     filename = emotions_chart(media)

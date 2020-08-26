@@ -21,6 +21,9 @@
             </figure>
             {% endif %}
 
+            <p> <b>Critics score</b> <span class="badge badge-pill badge-primary"> {{ media.critics_score }} </span> </p>
+            <p> <b>Audience score</b> <span class="badge badge-pill badge-primary"> {{ media.audience_score }}  </span>  </p>
+
             {% if categories is defined and categories|length %}
             <h6>Categories</h6>
             <ul class="list-group list-group-flush">

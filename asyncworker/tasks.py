@@ -6,7 +6,6 @@ import os
 import gensim
 from neo4j import GraphDatabase
 from neo4j.exceptions import CypherError
-import nltk
 from nltk.corpus import stopwords
 from nltk.stem.snowball import SnowballStemmer
 from nltk.tokenize import RegexpTokenizer
@@ -110,10 +109,10 @@ def find_similarities():
         log.debug(f"Updating neo4j with similarities for {movies[i]['movie']['slug']}")
         assert i == movies[i]['gensim_id']
         correlations = corr_scaled[i]
-        sim_corr = 0.75*similarities + 0.25*correlations
+        sim_corr = 0.25*similarities + 0.75*correlations
         neighbours = sorted(enumerate(sim_corr), key=lambda item: -item[1])[1:11]
         for j, similarity in neighbours:
-            if similarity > 0.5:
+            if similarity > 0.25:
                 with neo.session() as session:
                     q = """MATCH (m:Movie {slug: "%s"})
                     MATCH (sm: Movie {slug: "%s"}) 
