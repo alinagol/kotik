@@ -55,9 +55,9 @@ def find_similarities():
         q = "MATCH (m:Movie) RETURN m as movie"
         movies = session.run(q).data()
 
-    tokenizer = RegexpTokenizer(r'\w+')
+    tokenizer = RegexpTokenizer(r"\w+")
     stemmer = SnowballStemmer("english")
-    stop_list = stopwords.words('english')
+    stop_list = stopwords.words("english")
 
     dictionary = gensim.corpora.Dictionary()
 
@@ -73,7 +73,11 @@ def find_similarities():
         text_tokenized_stemmed = [stemmer.stem(word) for word in text_tokenized]
         dictionary.add_documents([text_tokenized_stemmed])
 
-    stop_ids = [dictionary.token2id[stopword] for stopword in stop_list if stopword in dictionary.token2id]
+    stop_ids = [
+        dictionary.token2id[stopword]
+        for stopword in stop_list
+        if stopword in dictionary.token2id
+    ]
     once_ids = [tokenid for tokenid, docfreq in dictionary.dfs.items() if docfreq == 1]
     dictionary.filter_tokens(stop_ids + once_ids)
     dictionary.compactify()
@@ -90,26 +94,28 @@ def find_similarities():
         text_tokenized = tokenizer.tokenize(text)
         text_tokenized_stemmed = [stemmer.stem(word) for word in text_tokenized]
         corpus.append(dictionary.doc2bow(text_tokenized_stemmed))
-        movie.update({'gensim_id': gensim_id})
+        movie.update({"gensim_id": gensim_id})
         gensim_id += 1
 
     tfidf = gensim.models.TfidfModel(corpus)
     corpus_tfidf = tfidf[corpus]
 
-    lsi = gensim.models.LsiModel(corpus_tfidf, id2word=dictionary, num_topics=NUM_TOPICS)
+    lsi = gensim.models.LsiModel(
+        corpus_tfidf, id2word=dictionary, num_topics=NUM_TOPICS
+    )
 
     index = gensim.similarities.MatrixSimilarity(lsi[corpus_tfidf])
 
     corr = calculate_correlations()
-    corr_scaled = MinMaxScaler(feature_range=(-1,1)).fit_transform(corr)
+    corr_scaled = MinMaxScaler(feature_range=(-1, 1)).fit_transform(corr)
 
     log.info("Updating neo4j with similarities")
 
     for i, similarities in enumerate(index):
         log.debug(f"Updating neo4j with similarities for {movies[i]['movie']['slug']}")
-        assert i == movies[i]['gensim_id']
+        assert i == movies[i]["gensim_id"]
         correlations = corr_scaled[i]
-        sim_corr = 0.25*similarities + 0.75*correlations
+        sim_corr = 0.25 * similarities + 0.75 * correlations
         neighbours = sorted(enumerate(sim_corr), key=lambda item: -item[1])[1:11]
         for j, similarity in neighbours:
             if similarity > 0.25:
@@ -118,7 +124,11 @@ def find_similarities():
                     MATCH (sm: Movie {slug: "%s"}) 
                     MERGE (m)-[r:SIMILAR]-(sm)
                     SET r.similarity = %f
-                    """ % (movies[i]["movie"]["slug"], movies[j]["movie"]["slug"], similarity)
+                    """ % (
+                        movies[i]["movie"]["slug"],
+                        movies[j]["movie"]["slug"],
+                        similarity,
+                    )
                     session.run(q)
 
 
@@ -155,18 +165,20 @@ def calculate_correlations():
 
     df = pd.DataFrame(movies)
 
-    genres = set([g for g in df['genres'].values for g in g])
-    categories = set([g for g in df['categories'].values for g in g])
+    genres = set([g for g in df["genres"].values for g in g])
+    categories = set([g for g in df["categories"].values for g in g])
 
     for genre in genres:
-        df[genre] = df.apply(lambda x: 1 if genre in x['genres'] else 0, axis=1)
+        df[genre] = df.apply(lambda x: 1 if genre in x["genres"] else 0, axis=1)
     for category in categories:
-        df[category] = df.apply(lambda x: 1 if category in x['categories'] else 0, axis=1)
+        df[category] = df.apply(
+            lambda x: 1 if category in x["categories"] else 0, axis=1
+        )
 
-    df.drop('genres', axis=1, inplace=True)
-    df.drop('categories', axis=1, inplace=True)
+    df.drop("genres", axis=1, inplace=True)
+    df.drop("categories", axis=1, inplace=True)
 
-    corr = df.select_dtypes(['number']).T.corr('spearman')  # 'kendall'
+    corr = df.select_dtypes(["number"]).T.corr("spearman")  # 'kendall'
 
     log.info("Correlations calculated")
 
@@ -221,7 +233,7 @@ def update_database():
             # Find whether the movie is already in Neo4j
             with neo.session() as session:
                 q = (
-                """MATCH (m: Movie {imdb_id: "%s"}) 
+                    """MATCH (m: Movie {imdb_id: "%s"}) 
                 RETURN m.name, m.imdb_data, m.rotten_tomatoes_data, m.ibm_data, m.plot;
                 """
                     % imdb_id
@@ -231,7 +243,9 @@ def update_database():
                     if not media[0]["m.imdb_data"]:
                         add_imdb_data(config["imdb"], imdb_id, neo)
                     if not media[0]["m.rotten_tomatoes_data"]:
-                        add_rotten_tomatoes_data(config["rotten_tomatoes"], imdb_id, neo)
+                        add_rotten_tomatoes_data(
+                            config["rotten_tomatoes"], imdb_id, neo
+                        )
                     if not media[0]["m.ibm_data"]:
                         add_ibm_data(config["ibm"], imdb_id, neo)
                     log.info(f'Skipping {media[0]["m.name"]}, already in Neo4j')
@@ -270,7 +284,7 @@ def update_database():
                 item_clean["desc"],
                 int(item_clean["length"]),
                 str(f'https://ororo.tv/en/{media_type}/{item_clean["slug"]}'),
-                item_clean["poster_thumb"]
+                item_clean["poster_thumb"],
             )
             queries.append(m)
 
@@ -291,8 +305,8 @@ def update_database():
                         WITH c, m
                         MERGE (c)-[:HAS_MOVIE]->(m);
                         """ % (
-                        f'tt{item_clean["imdb_id"]}',
-                        country.strip(),
+                    f'tt{item_clean["imdb_id"]}',
+                    country.strip(),
                 )
                 queries.append(c)
 
@@ -310,7 +324,7 @@ def update_database():
 def add_ibm_data(config, imdb_id, neo4jclient):
     with neo4jclient.session() as session:
         q = (
-        """MATCH (m: Movie {imdb_id: "%s"}) 
+            """MATCH (m: Movie {imdb_id: "%s"}) 
         RETURN m.ibm_data, m.plot, m.description, m.synopsis, m.reviews, m.consensus;
         """
             % imdb_id
@@ -392,7 +406,7 @@ def add_ibm_data(config, imdb_id, neo4jclient):
 def add_rotten_tomatoes_data(config, imdb_id, neo4jclient):
     with neo4jclient.session() as session:
         q = (
-        """MATCH (m: Movie {imdb_id: "%s"}) 
+            """MATCH (m: Movie {imdb_id: "%s"}) 
         RETURN m.rotten_tomatoes_data, m.slug, m.name;
         """
             % imdb_id
@@ -410,9 +424,10 @@ def add_rotten_tomatoes_data(config, imdb_id, neo4jclient):
 
         if rt_data:
             q = (
-            """MATCH (m: Movie {imdb_id: "%s"}) 
+                """MATCH (m: Movie {imdb_id: "%s"}) 
             SET m.rotten_tomatoes_data = true;
-            """  % imdb_id
+            """
+                % imdb_id
             )
             queries.append(q)
 
@@ -421,7 +436,7 @@ def add_rotten_tomatoes_data(config, imdb_id, neo4jclient):
                     SET m.consensus = "%s"
                     """ % (
                     imdb_id,
-                    cypher_escape(rt_data["ratingSummary"]["consensus"])
+                    cypher_escape(rt_data["ratingSummary"]["consensus"]),
                 )
                 queries.append(q)
 
@@ -431,7 +446,9 @@ def add_rotten_tomatoes_data(config, imdb_id, neo4jclient):
                         SET m.critics_rating = %f
                         """ % (
                             imdb_id,
-                            float(rt_data["ratingSummary"]["topCritics"]["averageRating"])
+                            float(
+                                rt_data["ratingSummary"]["topCritics"]["averageRating"]
+                            ),
                         )
                         queries.append(q)
                 except Exception:
@@ -444,7 +461,7 @@ def add_rotten_tomatoes_data(config, imdb_id, neo4jclient):
                 """ % (
                     imdb_id,
                     float(rt_data["ratings"]["critics_score"]),
-                    float(rt_data["ratings"]["audience_score"])
+                    float(rt_data["ratings"]["audience_score"]),
                 )
                 queries.append(q)
 
@@ -453,7 +470,7 @@ def add_rotten_tomatoes_data(config, imdb_id, neo4jclient):
                 SET m.synopsis = "%s";
                 """ % (
                     imdb_id,
-                    cypher_escape(rt_data["synopsis"])
+                    cypher_escape(rt_data["synopsis"]),
                 )
                 queries.append(q)
 
@@ -464,12 +481,12 @@ def add_rotten_tomatoes_data(config, imdb_id, neo4jclient):
                         reviews_list.append(review["quote"])
                     except KeyError:
                         pass
-                reviews = '. '.join(reviews_list)
+                reviews = ". ".join(reviews_list)
                 q = """MATCH (m: Movie {imdb_id: "%s"})
                     SET m.reviews = "%s";
                     """ % (
                     imdb_id,
-                    cypher_escape(reviews)
+                    cypher_escape(reviews),
                 )
                 queries.append(q)
 
@@ -524,7 +541,7 @@ def add_imdb_data(config, imdb_id, neo4jclient):
                 queries.append(g)
         if "Actors" in imdb_data.keys():
             for actor in imdb_data["Actors"].split(","):
-                if actor != 'n/a':
+                if actor != "n/a":
                     g = """MATCH (m: Movie {imdb_id: "%s"})
                     MERGE (p: Person {name: "%s"})
                     WITH p, m
@@ -536,7 +553,7 @@ def add_imdb_data(config, imdb_id, neo4jclient):
                     queries.append(g)
         if "Director" in imdb_data.keys():
             for director in imdb_data["Director"].split(","):
-                if director != 'n/a':
+                if director != "n/a":
                     g = """MATCH (m: Movie {imdb_id: "%s"})
                     MERGE (p: Person {name: "%s"})
                    WITH p, m
