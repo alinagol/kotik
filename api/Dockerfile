@@ -1,10 +1,11 @@
-FROM python:3.8.1-slim-buster
+FROM python:3.9.0
+
+# TODO: include https://getbootstrap.com/docs/3.3/getting-started/
 
 WORKDIR /app
 
 # Celery
-ENV CELERY_BROKER_URL redis://redis:6379/0
-ENV CELERY_RESULT_BACKEND redis://redis:6379/0
+ENV REDIS_URL redis://redis:6379/0
 ENV C_FORCE_ROOT true
 
 # Flask

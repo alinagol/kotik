@@ -1,7 +1,6 @@
-
 .ipynb_checkpoints
 venv/
-*/config.json
+*config.json
 *.ipynb
 .idea/
 */__pycache__

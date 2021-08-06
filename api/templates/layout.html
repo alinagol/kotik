@@ -5,13 +5,7 @@
       {% block head %}
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-
-      <link rel="stylesheet" media="screen" href="{{ url_for('static', filename='css/bootstrap.css') }}">
-      <link rel="stylesheet" media="screen" href="{{ url_for('static', filename='css/bootstrap-grid.css') }}">
-      <link rel="stylesheet" media="screen" href="{{ url_for('static', filename='css/bootstrap-reboot.css') }}">
-      <link rel="stylesheet" media="screen" href="{{ url_for('static', filename='js/bootstrap.js') }}">
-      <link rel="stylesheet" media="screen" href="{{ url_for('static', filename='js/bootstrap.bundle.js') }}">
-
+      <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css" integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO" crossorigin="anonymous">
       <title>{% block title %}{% endblock %} Kotik </title>
       {% endblock %}
   </head>
@@ -24,7 +18,7 @@
       <div class="btn-group" role="group">
           <form>
               <input type="button" class="btn btn-light" value="Refresh" onclick="window.location.reload();">
-              <input type="button" class="btn btn-light" value="Back" onclick="history.back()">
+              <input type="button" class="btn btn-light" value="Back" onclick="history.back();">
           </form>
       </div>
   </nav>
