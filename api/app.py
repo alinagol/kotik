@@ -7,7 +7,7 @@ from flask import Flask, redirect, render_template, request, url_for
 from neo4j import GraphDatabase
 from utils import emotions_chart
 
-from asyncworker import celery_app
+from asyncworker import celery_app  # type: ignore[attr-defined]
 
 # App
 app = Flask(__name__)

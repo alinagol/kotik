@@ -35,9 +35,7 @@ class DataSource:
                 session.mount("https://", adapter)
                 session.mount("http://", adapter)
 
-                response = session.get(
-                    f"{self.url}/{path}", params=params, verify=False
-                )
+                response = session.get(f"{self.url}/{path}", params=params)
                 response.raise_for_status()
         except requests.exceptions.HTTPError as http_err:
             log.error(http_err)
@@ -67,9 +65,7 @@ class Mubi(DataSource):
                     session.mount("http://", adapter)
 
                     params = {"page": page}
-                    response = session.get(
-                        f"{self.url}/{path}", params=params, verify=False
-                    )
+                    response = session.get(f"{self.url}/{path}", params=params)
                     response.raise_for_status()
             except requests.exceptions.HTTPError as http_err:
                 log.error(http_err)
@@ -104,9 +100,7 @@ class RottenTomatoes(DataSource):
             with requests.session() as session:
                 session.mount("https://", adapter)
                 session.mount("http://", adapter)
-                response = session.get(
-                    f"{self.url}/v1.0/movies/{path}", verify=False
-                )
+                response = session.get(f"{self.url}/v1.0/movies/{path}")
                 return response.json()
         except requests.exceptions.HTTPError as http_err:
             log.warning(http_err)

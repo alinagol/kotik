@@ -3,4 +3,4 @@ set -e
 
 black --line-length=79 api asyncworker
 isort -skip-gitignore api asyncworker
-mypy --ignore-missing-imports api asyncworker
+mypy --ignore-missing-imports --show-error-codes api asyncworker

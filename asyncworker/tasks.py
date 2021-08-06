@@ -6,9 +6,15 @@ from nltk.stem.snowball import SnowballStemmer
 from nltk.tokenize import RegexpTokenizer
 from params import NUM_TOPICS, TEXT_KEYS, mubi, neo, ororo
 from sklearn.preprocessing import MinMaxScaler
-from utils import add_ibm_data, add_imdb_data, add_rotten_tomatoes_data, calculate_correlations, cypher_escape
+from utils import (
+    add_ibm_data,
+    add_imdb_data,
+    add_rotten_tomatoes_data,
+    calculate_correlations,
+    cypher_escape,
+)
 
-from asyncworker import celery_app
+from asyncworker import celery_app  # type: ignore[attr-defined]
 
 log = logging.getLogger(__name__)
 
