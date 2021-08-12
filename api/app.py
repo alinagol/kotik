@@ -14,6 +14,8 @@ app = Flask(__name__)
 
 # Parameters
 app.config["UPLOAD_FOLDER"] = os.path.join("static", "plots")
+if not os.path.exists(os.path.join("static", "plots")):
+    os.makedirs(os.path.join("static", "plots"))
 
 # Logging
 log = logging.getLogger(__name__)
