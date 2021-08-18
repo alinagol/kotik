@@ -1,13 +1,14 @@
+# pylint: disable=line-too-long
+
 import json
 import logging
 import os
 from urllib.parse import unquote
 
+from celery import Celery
 from flask import Flask, redirect, render_template, request, url_for
 from neo4j import GraphDatabase
 from utils import emotions_chart
-
-from asyncworker import celery_app  # type: ignore[attr-defined]
 
 # App
 app = Flask(__name__)
@@ -27,9 +28,18 @@ with open("config.json") as f:
 # Database
 neo = GraphDatabase.driver(config["neo4j"]["url"], encrypted=False)
 
+# Asyncworker
+broker_url = result_backend = os.getenv("REDIS_URL", "redis://redis:6379")
+celery_parameters = {
+    "main": "asyncworker",
+    "broker": broker_url,
+    "backend": broker_url,
+}
+celery_app = Celery(**celery_parameters)
+
 
 @app.errorhandler(404)
-def not_found_error():
+def not_found_error(_error):
     return render_template("404.html"), 404
 
 
@@ -40,19 +50,23 @@ def internal_error(error):
 
 @app.route("/")
 def home():
-    with neo.session() as s:
-        count = s.run("MATCH (m:Movie) RETURN count(m.slug)").single().value()
+    with neo.session() as session:
+        count = (
+            session.run("MATCH (m:Movie) RETURN count(m.slug)")
+            .single()
+            .value()
+        )
     return render_template("home.html", count=count)
 
 
 @app.route("/choose")
 def choose():
-    with neo.session() as s:
-        categories = s.run(
-            "MATCH (c:Category) RETURN DISTINCT c.name ORDER BY c.name"
+    with neo.session() as session:
+        categories = session.run(
+            "MATCH (c:Category) RETURN DISTINCT c.name ORDER BY c.name",
         ).values()
         categories = [item for sublist in categories for item in sublist]
-        genres = s.run(
+        genres = session.run(
             "MATCH (g:Genre) RETURN DISTINCT g.name ORDER BY g.name"
         ).values()
         genres = [item for sublist in genres for item in sublist]
@@ -73,10 +87,10 @@ def choose_results():
         params.append(f'type: "{media_type}"')
     if year:
         params.append(f"year: {year}")
-    params = ",".join(params)
+    join_params = ",".join(params)
 
-    if params:
-        queries = ["MATCH (m: Movie {%s})\n" % params]
+    if join_params:
+        queries = ["MATCH (m: Movie {%s})\n" % join_params]
     else:
         queries = ["MATCH (m: Movie)\n"]
 
@@ -97,15 +111,15 @@ def choose_results():
                     % unquote(category)
                 )
     queries.append(
-        """RETURN {title: m.name, id: m.imdb_id, poster: m.poster, description: m.description, rating: m.imdb_rating} 
+        """RETURN {title: m.name, id: m.imdb_id, poster: m.poster, description: m.description, rating: m.imdb_rating}
         ORDER BY m.imdb_rating DESC
         """
     )
 
-    q = " ".join(queries)
+    query = " ".join(queries)
 
-    with neo.session() as s:
-        media = s.run(q).values()
+    with neo.session() as session:
+        media = session.run(query).values()
         media = [item for sublist in media for item in sublist]
     return render_template("media_list.html", media=media, filter=request.args)
 
@@ -141,12 +155,12 @@ def choose_best():
 @app.route("/rating/media")
 def best_media():
     rating = unquote(request.args.get("rating"))
-    with neo.session() as s:
-        media = s.run(
-            """MATCH (m:Movie) 
-            WHERE m.%s IS NOT NULL 
-            WITH m 
-            ORDER BY m.%s DESC 
+    with neo.session() as session:
+        media = session.run(
+            """MATCH (m:Movie)
+            WHERE m.%s IS NOT NULL
+            WITH m
+            ORDER BY m.%s DESC
             RETURN {title: m.name, id: m.imdb_id, poster: m.poster, description: m.description, rating: m.%s}
             """
             % (rating, rating, rating)
@@ -163,10 +177,10 @@ def search_media():
 @app.route("/media/details")
 def get_media():
     media_id = unquote(request.args.get("id"))
-    with neo.session() as s:
+    with neo.session() as session:
         media = (
-            s.run(
-                """MATCH (m:Movie {imdb_id: '%s'}) 
+            session.run(
+                """MATCH (m:Movie {imdb_id: '%s'})
                 RETURN m as movie
                 """
                 % media_id
@@ -174,14 +188,14 @@ def get_media():
             .single()
             .value()
         )
-        categories = s.run(
-            """MATCH (m:Movie {imdb_id: '%s'})<-[:HAS_MOVIE]-(c:Category) 
+        categories = session.run(
+            """MATCH (m:Movie {imdb_id: '%s'})<-[:HAS_MOVIE]-(c:Category)
             RETURN DISTINCT c.name
             """
             % media_id
         ).values()
-        genres = s.run(
-            """MATCH (m:Movie {imdb_id: '%s'})<-[:HAS_MOVIE]-(g:Genre) 
+        genres = session.run(
+            """MATCH (m:Movie {imdb_id: '%s'})<-[:HAS_MOVIE]-(g:Genre)
             RETURN DISTINCT g.name
             """
             % media_id
@@ -190,18 +204,21 @@ def get_media():
         categories = [item for sublist in categories for item in sublist]
         genres = [item for sublist in genres for item in sublist]
 
-        similar = s.run(
-            """MATCH (m:Movie {imdb_id: '%s'}) 
-            OPTIONAL MATCH (m)-[:SIMILAR]-(om:Movie) 
-            WITH om 
-            ORDER BY om.imdb_rating DESC 
+        similar = session.run(
+            """MATCH (m:Movie {imdb_id: '%s'})
+            OPTIONAL MATCH (m)-[:SIMILAR]-(om:Movie)
+            WITH om
+            ORDER BY om.imdb_rating DESC
             RETURN DISTINCT collect({id: om.imdb_id, title: om.name, poster: om.poster, description: om.description, rating: om.imdb_rating}) as similar
             """
             % media_id
         ).values()
         similar = similar[0][0]
 
-    filename = emotions_chart(media, app.config["UPLOAD_FOLDER"])
+    try:
+        filename = emotions_chart(media, app.config["UPLOAD_FOLDER"])
+    except KeyError:
+        filename = None
     return render_template(
         "media_details.html",
         media=media,
@@ -214,10 +231,10 @@ def get_media():
 
 @app.route("/actors")
 def choose_actors():
-    with neo.session() as s:
-        actors = s.run(
-            """MATCH (p:Person)-[:ACTED_IN]->(:Movie) 
-            RETURN DISTINCT p.name 
+    with neo.session() as session:
+        actors = session.run(
+            """MATCH (p:Person)-[:ACTED_IN]->(:Movie)
+            RETURN DISTINCT p.name
             ORDER BY p.name
             """
         ).values()
@@ -228,10 +245,10 @@ def choose_actors():
 @app.route("/actors/media")
 def actors_media():
     actor = unquote(request.args.get("actors"))
-    with neo.session() as s:
-        media = s.run(
-            """MATCH (p:Person {name: "%s"})-[:ACTED_IN]->(m:Movie) 
-            RETURN {title: m.name, id: m.imdb_id, poster: m.poster, description: m.description, rating: m.imdb_rating} 
+    with neo.session() as session:
+        media = session.run(
+            """MATCH (p:Person {name: "%s"})-[:ACTED_IN]->(m:Movie)
+            RETURN {title: m.name, id: m.imdb_id, poster: m.poster, description: m.description, rating: m.imdb_rating}
             ORDER BY m.imdb_rating DESC
             """
             % actor
@@ -244,10 +261,10 @@ def actors_media():
 
 @app.route("/directors")
 def choose_directors():
-    with neo.session() as s:
-        directors = s.run(
-            """MATCH (p:Person)-[:DIRECTED]->(:Movie) 
-            RETURN DISTINCT p.name 
+    with neo.session() as session:
+        directors = session.run(
+            """MATCH (p:Person)-[:DIRECTED]->(:Movie)
+            RETURN DISTINCT p.name
             ORDER BY p.name
             """
         ).values()
@@ -260,8 +277,8 @@ def choose_directors():
 @app.route("/directors/media")
 def directors_media():
     director = unquote(request.args.get("directors"))
-    with neo.session() as s:
-        media = s.run(
+    with neo.session() as session:
+        media = session.run(
             """MATCH (p:Person {name: "%s"})-[:DIRECTED]->(m:Movie)
             RETURN {title: m.name, id: m.imdb_id, poster: m.poster, description: m.description, rating: m.imdb_rating}
             ORDER BY m.imdb_rating DESC
@@ -276,14 +293,14 @@ def directors_media():
 
 @app.route("/categories/subcategories")
 def choose_subcategories():
-    with neo.session() as s:
-        subcategories = s.run(
+    with neo.session() as session:
+        subcategories = session.run(
             """MATCH (c:Category)
-            WHERE NOT (c)<-[:HAS_SUBCATEGORY]-() 
-            MATCH (c:Category)-[:HAS_MOVIE]->(m:Movie) 
-            OPTIONAL MATCH (c)-[:HAS_SUBCATEGORY]->(sc:Category) 
-            WITH c, sc, count(distinct m) as n 
-            ORDER BY n DESC 
+            WHERE NOT (c)<-[:HAS_SUBCATEGORY]-()
+            MATCH (c:Category)-[:HAS_MOVIE]->(m:Movie)
+            OPTIONAL MATCH (c)-[:HAS_SUBCATEGORY]->(sc:Category)
+            WITH c, sc, count(distinct m) as n
+            ORDER BY n DESC
             RETURN {category: c.name, subcategories: collect(distinct sc.name), movies: n}
             """
         ).values()
@@ -293,11 +310,11 @@ def choose_subcategories():
 
 @app.route("/categories")
 def choose_categories():
-    with neo.session() as s:
-        categories = s.run(
-            """MATCH (c:Category) 
-            WHERE NOT (c)<-[:HAS_SUBCATEGORY]-() 
-            RETURN DISTINCT c.name 
+    with neo.session() as session:
+        categories = session.run(
+            """MATCH (c:Category)
+            WHERE NOT (c)<-[:HAS_SUBCATEGORY]-()
+            RETURN DISTINCT c.name
             ORDER BY c.name
             """
         ).values()
@@ -310,10 +327,10 @@ def choose_categories():
 @app.route("/categories/media")
 def categories_media():
     category = unquote(request.args.get("categories"))
-    with neo.session() as s:
-        media = s.run(
-            """MATCH (c:Category {name: "%s"})-[:HAS_MOVIE]->(m:Movie) 
-            RETURN {title: m.name, id: m.imdb_id, poster: m.poster, description: m.description, rating: m.imdb_rating} 
+    with neo.session() as session:
+        media = session.run(
+            """MATCH (c:Category {name: "%s"})-[:HAS_MOVIE]->(m:Movie)
+            RETURN {title: m.name, id: m.imdb_id, poster: m.poster, description: m.description, rating: m.imdb_rating}
             ORDER BY m.imdb_rating DESC
             """
             % category
@@ -324,10 +341,10 @@ def categories_media():
 
 @app.route("/genres")
 def choose_genres():
-    with neo.session() as s:
-        genres = s.run(
-            """MATCH (g:Genre) 
-            RETURN DISTINCT g.name 
+    with neo.session() as session:
+        genres = session.run(
+            """MATCH (g:Genre)
+            RETURN DISTINCT g.name
             ORDER BY g.name
             """
         ).values()
@@ -338,10 +355,10 @@ def choose_genres():
 @app.route("/genres/media")
 def genres_media():
     genre = unquote(request.args.get("genres"))
-    with neo.session() as s:
-        media = s.run(
-            """MATCH (g:Genre {name: "%s"})-[:HAS_MOVIE]->(m:Movie) 
-            RETURN {title: m.name, id: m.imdb_id, description: m.description, poster: m.poster, rating: m.imdb_rating} 
+    with neo.session() as session:
+        media = session.run(
+            """MATCH (g:Genre {name: "%s"})-[:HAS_MOVIE]->(m:Movie)
+            RETURN {title: m.name, id: m.imdb_id, description: m.description, poster: m.poster, rating: m.imdb_rating}
             ORDER BY m.imdb_rating DESC
             """
             % genre

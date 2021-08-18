@@ -29,7 +29,7 @@ services:
       - redis
       - neo4j
   redis:
-    image: redis
+    image: redis:latest
   nginx:
     build:
       context: ./nginx

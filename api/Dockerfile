@@ -1,7 +1,5 @@
 FROM python:3.9.0
 
-# TODO: include https://getbootstrap.com/docs/3.3/getting-started/
-
 WORKDIR /app
 
 # Celery
@@ -14,7 +12,7 @@ ENV PORT 5001
 ENV DEBUG true
 EXPOSE 5001
 
-COPY ../requirements.txt /app
+COPY ./requirements.txt /app
 RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
 

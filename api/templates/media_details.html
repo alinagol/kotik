@@ -6,13 +6,13 @@
 {% block content %}
 
 <div class="container-fluid">
-    <h2> <a href="{{ media.ororo_link }}"> {{ media.name }} </a> <span class="badge badge-pill badge-primary"> {{ media.imdb_rating }} </span> </h2>
+    <h2> <a href="{{ media.link }}"> {{ media.name }} </a> <span class="badge badge-pill badge-primary"> {{ media.imdb_rating }} </span> </h2>
 
     <div class="row">
         <div class="col-4">
 
             <figure>
-                <img src="{{ media.poster }}" alt="Poster">
+                <img src="{{ media.poster }}" alt="Poster" width="500">
             </figure>
 
             {% if plot is defined and plot|length %}

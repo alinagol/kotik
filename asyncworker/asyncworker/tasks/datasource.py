@@ -1,5 +1,5 @@
 import logging
-from typing import Tuple, Union
+from typing import Any, Dict, Generator, Tuple, Union
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -8,40 +8,53 @@ from urllib3.util.retry import Retry
 log = logging.getLogger(__name__)
 
 retry_strategy = Retry(
-    total=3, backoff_factor=1, status_forcelist=[502, 503, 504]
+    total=3, backoff_factor=1, status_forcelist=[502, 503, 504, 429]
 )
 adapter = HTTPAdapter(max_retries=retry_strategy)
 
 
 class DataSource:
     def __init__(
-        self, url: str, auth: Union[None, Tuple[str, str]] = None, **kwargs
+        self,
+        url: str,
+        auth: Union[None, Tuple[str, str]] = None,
+        **kwargs: Any,
     ):
         self.url = url
         self.auth = auth
         self.kwargs = kwargs
 
-    def get(self, params: dict = None, path: str = None, **kwargs):
-        if "headers" in kwargs:
-            headers = kwargs["headers"]
-        else:
-            headers = None
-
+    def get(
+        self,
+        params: Union[Dict[str, Any], None] = None,
+        path: Union[str, None] = None,
+    ) -> Generator[Dict[str, Any], None, None]:
+        headers = self.kwargs.get("headers")
         try:
             with requests.session() as session:
-
-                session.headers = headers
+                if headers:
+                    session.headers = headers
                 session.auth = self.auth
                 session.mount("https://", adapter)
                 session.mount("http://", adapter)
 
                 response = session.get(f"{self.url}/{path}", params=params)
                 response.raise_for_status()
+
+                if path and path in response.json().keys():
+                    result = response.json()[path]
+                else:
+                    result = response.json()
+
+                if isinstance(result, list):
+                    for item in result:
+                        yield item
+                else:
+                    yield result
+
         except requests.exceptions.HTTPError as http_err:
             log.error(http_err)
             raise
-
-        return response.json()
 
 
 class Ororo(DataSource):
@@ -50,13 +63,16 @@ class Ororo(DataSource):
             self,
             url=url,
             auth=(username, password),
-            headers={"User-Agent": "curl/7.51.0"},
+            headers={"User-Agent": "kotik"},
         )
 
 
 class Mubi(DataSource):
-    def get(self, params: dict = None, path: str = None, **kwargs):
-        result = []
+    def get(
+        self,
+        params: Union[Dict[str, Any], None] = None,
+        path: Union[str, None] = None,
+    ) -> Generator[Dict[str, Any], None, None]:
         page = 1
         while True:
             try:
@@ -71,11 +87,11 @@ class Mubi(DataSource):
                 log.error(http_err)
                 raise
             if response.json():
-                result.append(response.json())
                 page += 1
+                for movie in response.json():
+                    yield movie
             else:
                 break
-        return result
 
 
 class IMDB(DataSource):
@@ -94,14 +110,18 @@ class RottenTomatoes(DataSource):
     def __init__(self, url: str):
         DataSource.__init__(self, url=f"{url}/", auth=None)
 
-    def get(self, params: dict = None, path: str = None, **kwargs):
+    def get(
+        self,
+        params: Union[Dict[str, Any], None] = None,
+        path: Union[str, None] = None,
+    ) -> Generator[Dict[str, Any], None, None]:
 
         try:
             with requests.session() as session:
                 session.mount("https://", adapter)
                 session.mount("http://", adapter)
                 response = session.get(f"{self.url}/v1.0/movies/{path}")
-                return response.json()
+                yield response.json()
         except requests.exceptions.HTTPError as http_err:
             log.warning(http_err)
 
@@ -124,7 +144,8 @@ class RottenTomatoes(DataSource):
                                 params["title"],
                             )
                             raise
-                        return self.get(path=correct_path)
+                        result = self.get(path=correct_path)
+                        yield from result
                 except requests.exceptions.HTTPError as http_err:
                     log.error(http_err)
                     raise

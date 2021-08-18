@@ -1,4 +1,5 @@
 from math import pi
+from typing import Any, Dict
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -6,18 +7,14 @@ import matplotlib.pyplot as plt
 matplotlib.use("agg")
 
 
-def emotions_chart(media, upload_folder):
+def emotions_chart(media: Dict[str, Any], upload_folder: str) -> str:
     emotions = ["sadness", "anger", "joy", "disgust", "fear"]
-    N = len(emotions)
+    dimensions = len(emotions)
 
-    try:
-        values = [media[emotion] for emotion in emotions]
-    except KeyError:
-        return
-
+    values = [media[emotion] for emotion in emotions]
     values.append(values[0])
 
-    angles = [n / float(N) * 2 * pi for n in range(N)]
+    angles = [n / float(dimensions) * 2 * pi for n in range(dimensions)]
     angles += angles[:1]
 
     fig = plt.figure(figsize=(3, 3))
