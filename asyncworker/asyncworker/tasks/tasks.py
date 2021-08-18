@@ -128,7 +128,7 @@ def find_similarities() -> str:  # pylint: disable=too-many-locals
 
 
 @celery_app.task(name="tasks.add_media", base=TaskWithRetry)
-def add_media(  # pylint: disable=too-many-branches
+def add_media(  # pylint: disable=too-many-branches, too-many-statements
     item: Dict[str, str], media_type: str, source: str
 ) -> str:
     item_clean = {
