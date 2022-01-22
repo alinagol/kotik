@@ -1,7 +1,0 @@
-celery[redis]
-requests
-neo4j
-pandas
-nltk
-gensim
-sklearn

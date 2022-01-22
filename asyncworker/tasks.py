@@ -1,33 +1,83 @@
-from celery import Celery
-import json
 import logging
 import os
 
 import gensim
+import pandas as pd
+from celery import Celery, Task
+from clients import (
+    init_ibm_client,
+    init_imdb_client,
+    init_neo4j_client,
+    init_ororo_client,
+    init_rotten_tomatoes_client,
+)
 from neo4j import GraphDatabase
-from neo4j.exceptions import CypherError
+from neo4j.exceptions import Neo4jError
 from nltk.corpus import stopwords
 from nltk.stem.snowball import SnowballStemmer
 from nltk.tokenize import RegexpTokenizer
-import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 
-from datasource import Ororo, IMDB, IBMWatson, RottenTomatoes
-
 logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
 )
 log = logging.getLogger(__name__)
 
-CELERY_BROKER_URL = (os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379"),)
+CELERY_BROKER_URL = (
+    os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379"),
+)
 CELERY_RESULT_BACKEND = os.environ.get(
     "CELERY_RESULT_BACKEND", "redis://localhost:6379"
 )
-
-celery = Celery("tasks", broker=CELERY_BROKER_URL, backend=CELERY_RESULT_BACKEND)
-
-NUM_TOPICS = 500
+NUM_TOPICS = 100
 TEXT_KEYS = ["plot", "description", "synopsis", "consensus"]
+
+
+celery = Celery(
+    "tasks", broker=CELERY_BROKER_URL, backend=CELERY_RESULT_BACKEND
+)
+
+
+class BaseTask(Task):  # pylint: disable=abstract-method
+    retry_kwargs = {"max_retries": 3}
+    retry_backoff = True
+
+    _neo4j_client = None
+    _imdb_client = None
+    _ibm_client = None
+    _ororo_client = None
+    _rotten_tomatoes_client = None
+
+    @property
+    def neo4j_client(self):
+        if self._neo4j_client is None:
+            self._neo4j_client = init_neo4j_client()
+        return self._neo4j_client
+
+    @property
+    def imdb_client(self):
+        if self._imdb_client is None:
+            self._imdb_client = init_imdb_client()
+        return self._imdb_client
+
+    @property
+    def ibm_client(self):
+        if self._ibm_client is None:
+            self._ibm_client = init_ibm_client()
+        return self._ibm_client
+
+    @property
+    def ororo_client(self):
+        if self._ororo_client is None:
+            self._ororo_client = init_ororo_client()
+        return self._ororo_client
+
+    @property
+    def rotten_tomatoes_client(self):
+        if self._rotten_tomatoes_client is None:
+            self._rotten_tomatoes_client = init_rotten_tomatoes_client()
+        return self._rotten_tomatoes_client
 
 
 def cypher_escape(s):
@@ -37,27 +87,22 @@ def cypher_escape(s):
         return s
 
 
-@celery.task(name="tasks.find_similarities")
+@celery.task(base=BaseTask)
 def find_similarities():
     log.info("Finding similarities...")
 
-    with open("config.json") as f:
-        config = json.load(f)
-
-    neo = GraphDatabase.driver(config["neo4j"]["url"], encrypted=False)
-
     # Clean up old similarities
-    with neo.session() as session:
+    with find_similarities.neo4j_client.session() as session:
         q = "MATCH (:Movie)-[r:SIMILAR]-(:Movie) DETACH DELETE r"
         session.run(q)
 
-    with neo.session() as session:
+    with find_similarities.neo4j_client.session() as session:
         q = "MATCH (m:Movie) RETURN m as movie"
         movies = session.run(q).data()
 
-    tokenizer = RegexpTokenizer(r'\w+')
+    tokenizer = RegexpTokenizer(r"\w+")
     stemmer = SnowballStemmer("english")
-    stop_list = stopwords.words('english')
+    stop_list = stopwords.words("english")
 
     dictionary = gensim.corpora.Dictionary()
 
@@ -65,16 +110,24 @@ def find_similarities():
         text_list = []
 
         for key in TEXT_KEYS:
-            if movie["movie"][key] and type(movie["movie"][key]) == str:
+            if movie["movie"][key] and isinstance(movie["movie"][key], str):
                 text_list.append(movie["movie"][key].lower())
 
         text = ". ".join(text_list)
         text_tokenized = tokenizer.tokenize(text)
-        text_tokenized_stemmed = [stemmer.stem(word) for word in text_tokenized]
+        text_tokenized_stemmed = [
+            stemmer.stem(word) for word in text_tokenized
+        ]
         dictionary.add_documents([text_tokenized_stemmed])
 
-    stop_ids = [dictionary.token2id[stopword] for stopword in stop_list if stopword in dictionary.token2id]
-    once_ids = [tokenid for tokenid, docfreq in dictionary.dfs.items() if docfreq == 1]
+    stop_ids = [
+        dictionary.token2id[stopword]
+        for stopword in stop_list
+        if stopword in dictionary.token2id
+    ]
+    once_ids = [
+        tokenid for tokenid, docfreq in dictionary.dfs.items() if docfreq == 1
+    ]
     dictionary.filter_tokens(stop_ids + once_ids)
     dictionary.compactify()
 
@@ -83,53 +136,59 @@ def find_similarities():
     for movie in movies:
         text_list = []
         for key in TEXT_KEYS:
-            if movie["movie"][key] and type(movie["movie"][key]) == str:
+            if movie["movie"][key] and isinstance(movie["movie"][key], str):
                 text_list.append(movie["movie"][key].lower())
 
         text = ". ".join(text_list)
         text_tokenized = tokenizer.tokenize(text)
-        text_tokenized_stemmed = [stemmer.stem(word) for word in text_tokenized]
+        text_tokenized_stemmed = [
+            stemmer.stem(word) for word in text_tokenized
+        ]
         corpus.append(dictionary.doc2bow(text_tokenized_stemmed))
-        movie.update({'gensim_id': gensim_id})
+        movie.update({"gensim_id": gensim_id})
         gensim_id += 1
 
     tfidf = gensim.models.TfidfModel(corpus)
     corpus_tfidf = tfidf[corpus]
 
-    lsi = gensim.models.LsiModel(corpus_tfidf, id2word=dictionary, num_topics=NUM_TOPICS)
+    lsi = gensim.models.LsiModel(
+        corpus_tfidf, id2word=dictionary, num_topics=NUM_TOPICS
+    )
 
     index = gensim.similarities.MatrixSimilarity(lsi[corpus_tfidf])
 
-    corr = calculate_correlations()
-    corr_scaled = MinMaxScaler(feature_range=(-1,1)).fit_transform(corr)
+    corr = calculate_correlations(find_similarities.neo4j_client)
+    corr_scaled = MinMaxScaler(feature_range=(-1, 1)).fit_transform(corr)
 
     log.info("Updating neo4j with similarities")
 
-    for i, similarities in enumerate(index):
-        log.debug(f"Updating neo4j with similarities for {movies[i]['movie']['slug']}")
-        assert i == movies[i]['gensim_id']
-        correlations = corr_scaled[i]
-        sim_corr = 0.25*similarities + 0.75*correlations
-        neighbours = sorted(enumerate(sim_corr), key=lambda item: -item[1])[1:11]
+    for indx, similarities in enumerate(index):
+        log.debug(
+            f"Updating neo4j with similarities for {movies[indx]['movie']['slug']}"
+        )
+        assert indx == movies[indx]["gensim_id"]
+        correlations = corr_scaled[indx]
+        sim_corr = 0.25 * similarities + 0.75 * correlations
+        neighbours = sorted(enumerate(sim_corr), key=lambda item: -item[1])[
+            1:11
+        ]
         for j, similarity in neighbours:
             if similarity > 0.25:
-                with neo.session() as session:
+                with find_similarities.neo4j_client.session() as session:
                     q = """MATCH (m:Movie {slug: "%s"})
                     MATCH (sm: Movie {slug: "%s"}) 
                     MERGE (m)-[r:SIMILAR]-(sm)
                     SET r.similarity = %f
-                    """ % (movies[i]["movie"]["slug"], movies[j]["movie"]["slug"], similarity)
+                    """ % (
+                        movies[indx]["movie"]["slug"],
+                        movies[j]["movie"]["slug"],
+                        similarity,
+                    )
                     session.run(q)
 
 
-def calculate_correlations():
+def calculate_correlations(neo: GraphDatabase):
     log.info("Calculating correlations...")
-
-    with open("config.json") as f:
-        config = json.load(f)
-
-    # Neo4j
-    neo = GraphDatabase.driver(config["neo4j"]["url"], encrypted=False)
 
     with neo.session() as session:
         q = """MATCH (m:Movie)
@@ -155,33 +214,31 @@ def calculate_correlations():
 
     df = pd.DataFrame(movies)
 
-    genres = set([g for g in df['genres'].values for g in g])
-    categories = set([g for g in df['categories'].values for g in g])
+    genres = set(g for g in df["genres"].values for g in g)
+    categories = set(g for g in df["categories"].values for g in g)
 
     for genre in genres:
-        df[genre] = df.apply(lambda x: 1 if genre in x['genres'] else 0, axis=1)
+        df[genre] = df.apply(
+            lambda x: 1 if genre in x["genres"] else 0, axis=1
+        )
     for category in categories:
-        df[category] = df.apply(lambda x: 1 if category in x['categories'] else 0, axis=1)
+        df[category] = df.apply(
+            lambda x: 1 if category in x["categories"] else 0, axis=1
+        )
 
-    df.drop('genres', axis=1, inplace=True)
-    df.drop('categories', axis=1, inplace=True)
+    df.drop("genres", axis=1, inplace=True)
+    df.drop("categories", axis=1, inplace=True)
 
-    corr = df.select_dtypes(['number']).T.corr('spearman')  # 'kendall'
+    corr = df.select_dtypes(["number"]).T.corr("spearman")  # 'kendall'
 
     log.info("Correlations calculated")
 
     return corr
 
 
-@celery.task(name="tasks.update_database")
+@celery.task(base=BaseTask)
 def update_database():
     log.info("Updating movie database...")
-
-    with open("config.json") as f:
-        config = json.load(f)
-
-    # Neo4j
-    neo = GraphDatabase.driver(config["neo4j"]["url"], encrypted=False)
 
     index = [
         "CREATE INDEX movie_slug FOR (m:Movie) ON (m.slug, m.name)",
@@ -191,21 +248,14 @@ def update_database():
     ]
     for i in index:
         try:
-            with neo.session() as session:
+            with update_database.neo4j_client.session() as session:
                 session.run(i)
-        except CypherError:
+        except Neo4jError:
             pass
 
-    # Data sources
-    ororo = Ororo(
-        url=config["ororo"]["url"],
-        username=config["ororo"]["username"],
-        password=config["ororo"]["password"],
-    )
-
     # Get movies and series from Ororo
-    movies = ororo.get(path="movies")["movies"]
-    shows = ororo.get(path="shows")["shows"]
+    movies = update_database.ororo_client.get(path="movies")["movies"]
+    shows = update_database.ororo_client.get(path="shows")["shows"]
     log.info(f"Found {len(movies)} movies and {len(shows)} shows in Ororo.")
 
     library = {"movies": movies, "shows": shows}
@@ -213,15 +263,17 @@ def update_database():
     for media_type, items in library.items():
         for item in items:
 
-            item_clean = {key: cypher_escape(value) for key, value in item.items()}
+            item_clean = {
+                key: cypher_escape(value) for key, value in item.items()
+            }
             imdb_id = f'tt{item_clean["imdb_id"]}'
 
             log.info(f'Processing {item["name"]} {imdb_id}...')
 
             # Find whether the movie is already in Neo4j
-            with neo.session() as session:
+            with update_database.neo4j.session() as session:
                 q = (
-                """MATCH (m: Movie {imdb_id: "%s"}) 
+                    """MATCH (m: Movie {imdb_id: "%s"}) 
                 RETURN m.name, m.imdb_data, m.rotten_tomatoes_data, m.ibm_data, m.plot;
                 """
                     % imdb_id
@@ -229,12 +281,26 @@ def update_database():
                 media = session.run(q).data()
                 if media:
                     if not media[0]["m.imdb_data"]:
-                        add_imdb_data(config["imdb"], imdb_id, neo)
+                        add_imdb_data(
+                            imdb_id,
+                            update_database.neo4j_client,
+                            update_database.imdb_client,
+                        )
                     if not media[0]["m.rotten_tomatoes_data"]:
-                        add_rotten_tomatoes_data(config["rotten_tomatoes"], imdb_id, neo)
+                        add_rotten_tomatoes_data(
+                            imdb_id,
+                            update_database.neo4j_client,
+                            update_database.rotter_tomatoes_client,
+                        )
                     if not media[0]["m.ibm_data"]:
-                        add_ibm_data(config["ibm"], imdb_id, neo)
-                    log.info(f'Skipping {media[0]["m.name"]}, already in Neo4j')
+                        add_ibm_data(
+                            imdb_id,
+                            update_database.neo4j_client,
+                            update_database.ibm_client,
+                        )
+                    log.info(
+                        f'Skipping {media[0]["m.name"]}, already in Neo4j'
+                    )
                     continue
 
             # If movie not yet in Neo4j
@@ -270,7 +336,7 @@ def update_database():
                 item_clean["desc"],
                 int(item_clean["length"]),
                 str(f'https://ororo.tv/en/{media_type}/{item_clean["slug"]}'),
-                item_clean["poster_thumb"]
+                item_clean["poster_thumb"],
             )
             queries.append(m)
 
@@ -291,26 +357,38 @@ def update_database():
                         WITH c, m
                         MERGE (c)-[:HAS_MOVIE]->(m);
                         """ % (
-                        f'tt{item_clean["imdb_id"]}',
-                        country.strip(),
+                    f'tt{item_clean["imdb_id"]}',
+                    country.strip(),
                 )
                 queries.append(c)
 
-            with neo.session() as session:
+            with update_database.neo4j_client.session() as session:
                 log.info(f"Uploading {imdb_id} data to Neo4j")
                 for q in queries:
                     session.run(q)
 
             # Extra information
-            add_imdb_data(config["imdb"], imdb_id, neo)
-            add_rotten_tomatoes_data(config["rotten_tomatoes"], imdb_id, neo)
-            add_ibm_data(config["ibm"], imdb_id, neo)
+            add_imdb_data(
+                imdb_id,
+                update_database.neo4j_client,
+                update_database.imdb_client,
+            )
+            add_rotten_tomatoes_data(
+                imdb_id,
+                update_database.neo4j_client,
+                update_database.rotter_tomatoes_client,
+            )
+            add_ibm_data(
+                imdb_id,
+                update_database.neo4j_client,
+                update_database.ibm_client,
+            )
 
 
-def add_ibm_data(config, imdb_id, neo4jclient):
-    with neo4jclient.session() as session:
+def add_ibm_data(imdb_id: str, neo: GraphDatabase, ibm_client) -> None:
+    with neo.session() as session:
         q = (
-        """MATCH (m: Movie {imdb_id: "%s"}) 
+            """MATCH (m: Movie {imdb_id: "%s"}) 
         RETURN m.ibm_data, m.plot, m.description, m.synopsis, m.reviews, m.consensus;
         """
             % imdb_id
@@ -319,15 +397,13 @@ def add_ibm_data(config, imdb_id, neo4jclient):
 
         if data_flag[0]["m.ibm_data"]:
             return
-        else:
-            text_list = []
-            for item in data_flag[0]:
-                if data_flag[0][item] and type(data_flag[0][item]) == str:
-                    text_list.append(data_flag[0][item])
-            text = ". ".join(text_list)
+        text_list = []
+        for item in data_flag[0]:
+            if data_flag[0][item] and isinstance(data_flag[0][item], str):
+                text_list.append(data_flag[0][item])
+        text = ". ".join(text_list)
     queries = []
     try:
-        ibm_client = IBMWatson(url=config["url"], api_key=config["apikey"])
         log.info(f"Getting IBM data for {imdb_id}")
         ibm_data = ibm_client.get(
             path="/v1/analyze",
@@ -344,8 +420,9 @@ def add_ibm_data(config, imdb_id, neo4jclient):
                 if categories:
                     for i, category in enumerate(categories[1:]):
                         if i == 0:
-                            q = 'MERGE (c:Category {name: "%s"})' % cypher_escape(
-                                category.lower().strip()
+                            q = (
+                                'MERGE (c:Category {name: "%s"})'
+                                % cypher_escape(category.lower().strip())
                             )
                         else:
                             q = """MATCH (n:Category {name: "%s"})
@@ -371,7 +448,9 @@ def add_ibm_data(config, imdb_id, neo4jclient):
                             t["score"],
                         )
                         queries.append(q)
-        for emotion, score in ibm_data["emotion"]["document"]["emotion"].items():
+        for emotion, score in ibm_data["emotion"]["document"][
+            "emotion"
+        ].items():
             q = """MATCH (m: Movie {imdb_id: "%s"})
             SET m.ibm_data = true
             SET m.%s = %f
@@ -382,17 +461,19 @@ def add_ibm_data(config, imdb_id, neo4jclient):
             )
             queries.append(q)
 
-        with neo4jclient.session() as session:
+        with neo.session() as session:
             for q in queries:
                 session.run(q)
     except Exception:
         log.warning(f"Cannot get IBM info for {imdb_id}", exc_info=True)
 
 
-def add_rotten_tomatoes_data(config, imdb_id, neo4jclient):
-    with neo4jclient.session() as session:
+def add_rotten_tomatoes_data(
+    imdb_id: str, neo: GraphDatabase, rotten_tomatoes_client
+) -> None:
+    with neo.session() as session:
         q = (
-        """MATCH (m: Movie {imdb_id: "%s"}) 
+            """MATCH (m: Movie {imdb_id: "%s"}) 
         RETURN m.rotten_tomatoes_data, m.slug, m.name;
         """
             % imdb_id
@@ -404,15 +485,17 @@ def add_rotten_tomatoes_data(config, imdb_id, neo4jclient):
         title = data_flag[0]["m.name"]
     queries = []
     try:
-        rotten_tomatoes_client = RottenTomatoes(url=config["url"])
         log.info(f"Getting Rotten Tomatoes data for {imdb_id}")
-        rt_data = rotten_tomatoes_client.get(path=slug, params={"title": title})
+        rt_data = rotten_tomatoes_client.get(
+            path=slug, params={"title": title}
+        )
 
         if rt_data:
             q = (
-            """MATCH (m: Movie {imdb_id: "%s"}) 
+                """MATCH (m: Movie {imdb_id: "%s"}) 
             SET m.rotten_tomatoes_data = true;
-            """  % imdb_id
+            """
+                % imdb_id
             )
             queries.append(q)
 
@@ -421,17 +504,24 @@ def add_rotten_tomatoes_data(config, imdb_id, neo4jclient):
                     SET m.consensus = "%s"
                     """ % (
                     imdb_id,
-                    cypher_escape(rt_data["ratingSummary"]["consensus"])
+                    cypher_escape(rt_data["ratingSummary"]["consensus"]),
                 )
                 queries.append(q)
 
                 try:
-                    if rt_data["ratingSummary"]["topCritics"]["averageRating"] != -1:
+                    if (
+                        rt_data["ratingSummary"]["topCritics"]["averageRating"]
+                        != -1
+                    ):
                         q = """MATCH (m: Movie {imdb_id: "%s"})
                         SET m.critics_rating = %f
                         """ % (
                             imdb_id,
-                            float(rt_data["ratingSummary"]["topCritics"]["averageRating"])
+                            float(
+                                rt_data["ratingSummary"]["topCritics"][
+                                    "averageRating"
+                                ]
+                            ),
                         )
                         queries.append(q)
                 except Exception:
@@ -444,7 +534,7 @@ def add_rotten_tomatoes_data(config, imdb_id, neo4jclient):
                 """ % (
                     imdb_id,
                     float(rt_data["ratings"]["critics_score"]),
-                    float(rt_data["ratings"]["audience_score"])
+                    float(rt_data["ratings"]["audience_score"]),
                 )
                 queries.append(q)
 
@@ -453,7 +543,7 @@ def add_rotten_tomatoes_data(config, imdb_id, neo4jclient):
                 SET m.synopsis = "%s";
                 """ % (
                     imdb_id,
-                    cypher_escape(rt_data["synopsis"])
+                    cypher_escape(rt_data["synopsis"]),
                 )
                 queries.append(q)
 
@@ -464,24 +554,26 @@ def add_rotten_tomatoes_data(config, imdb_id, neo4jclient):
                         reviews_list.append(review["quote"])
                     except KeyError:
                         pass
-                reviews = '. '.join(reviews_list)
+                reviews = ". ".join(reviews_list)
                 q = """MATCH (m: Movie {imdb_id: "%s"})
                     SET m.reviews = "%s";
                     """ % (
                     imdb_id,
-                    cypher_escape(reviews)
+                    cypher_escape(reviews),
                 )
                 queries.append(q)
 
-            with neo4jclient.session() as session:
+            with neo.session() as session:
                 for q in queries:
                     session.run(q)
     except Exception:
-        log.warning(f"Cannot get Rotten Tomatoes info for {imdb_id}", exc_info=True)
+        log.warning(
+            f"Cannot get Rotten Tomatoes info for {imdb_id}", exc_info=True
+        )
 
 
-def add_imdb_data(config, imdb_id, neo4jclient):
-    with neo4jclient.session() as session:
+def add_imdb_data(imdb_id: str, neo: GraphDatabase, imdb_client) -> None:
+    with neo.session() as session:
         q = (
             """MATCH (m: Movie {imdb_id: "%s"}) 
         RETURN m.imdb_data;
@@ -493,7 +585,6 @@ def add_imdb_data(config, imdb_id, neo4jclient):
             return
     queries = []
     try:
-        imdb_client = IMDB(url=config["url"], api_key=config["apikey"])
         log.info(f"Getting IMDB data for {imdb_id}")
         imdb_data = imdb_client.get(params={"i": f"{imdb_id}"})
         q = (
@@ -524,7 +615,7 @@ def add_imdb_data(config, imdb_id, neo4jclient):
                 queries.append(g)
         if "Actors" in imdb_data.keys():
             for actor in imdb_data["Actors"].split(","):
-                if actor != 'n/a':
+                if actor != "n/a":
                     g = """MATCH (m: Movie {imdb_id: "%s"})
                     MERGE (p: Person {name: "%s"})
                     WITH p, m
@@ -536,7 +627,7 @@ def add_imdb_data(config, imdb_id, neo4jclient):
                     queries.append(g)
         if "Director" in imdb_data.keys():
             for director in imdb_data["Director"].split(","):
-                if director != 'n/a':
+                if director != "n/a":
                     g = """MATCH (m: Movie {imdb_id: "%s"})
                     MERGE (p: Person {name: "%s"})
                    WITH p, m
@@ -546,7 +637,7 @@ def add_imdb_data(config, imdb_id, neo4jclient):
                         director.lower().strip(),
                     )
                     queries.append(g)
-        with neo4jclient.session() as session:
+        with neo.session() as session:
             for q in queries:
                 session.run(q)
     except Exception:

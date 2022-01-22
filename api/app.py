@@ -1,15 +1,14 @@
 import json
-from math import pi
 import logging
 import os
-from urllib.parse import unquote
 import warnings
+from math import pi
+from urllib.parse import unquote
 
-from flask import Flask, request, render_template, redirect, url_for, jsonify
 import matplotlib
 import matplotlib.pyplot as plt
+from flask import Flask, redirect, render_template, request, url_for
 from neo4j import GraphDatabase
-
 from worker import celery
 
 # App
@@ -23,7 +22,8 @@ matplotlib.use("agg")
 
 # Logging
 logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
 )
 log = logging.getLogger(__name__)
 
@@ -36,11 +36,6 @@ neo = GraphDatabase.driver(config["neo4j"]["url"], encrypted=False)
 
 
 # Endpoints
-@app.route("/config")
-def config():
-    return jsonify(app.config())
-
-
 @app.route("/")
 def home():
     with neo.session() as s:
@@ -89,7 +84,8 @@ def choose_results():
         for genre in genres:
             if genre:
                 queries.append(
-                    'MATCH (m)<-[:HAS_MOVIE]-(:Genre {name: "%s"})\n' % unquote(genre)
+                    'MATCH (m)<-[:HAS_MOVIE]-(:Genre {name: "%s"})\n'
+                    % unquote(genre)
                 )
     if categories:
         for category in categories:
@@ -98,7 +94,9 @@ def choose_results():
                     'MATCH (m)<-[:HAS_MOVIE]-(:Category {name: "%s"})\n'
                     % unquote(category)
                 )
-    queries.append("RETURN {title: m.name, id: m.imdb_id, poster: m.poster, description: m.description, rating: m.imdb_rating} ORDER BY m.imdb_rating DESC")
+    queries.append(
+        "RETURN {title: m.name, id: m.imdb_id, poster: m.poster, description: m.description, rating: m.imdb_rating} ORDER BY m.imdb_rating DESC"
+    )
 
     q = " ".join(queries)
 
@@ -119,9 +117,20 @@ def similarity():
     celery.send_task("tasks.find_similarities")
     return redirect(url_for("home"))
 
+
 @app.route("/rating")
 def best():
-    ratings = ["critics_rating", "audience_score", "imdb_rating", "critics_score", "joy", "disgust", "fear", "anger", "sadness"]
+    ratings = [
+        "critics_rating",
+        "audience_score",
+        "imdb_rating",
+        "critics_score",
+        "joy",
+        "disgust",
+        "fear",
+        "anger",
+        "sadness",
+    ]
     return render_template("media_filter.html", filter="rating", items=ratings)
 
 
@@ -130,7 +139,7 @@ def best_media():
     rating = unquote(request.args.get("rating"))
     with neo.session() as s:
         media = s.run(
-            'MATCH (m:Movie) WHERE m.%s IS NOT NULL WITH m ORDER BY m.%s DESC RETURN {title: m.name, id: m.imdb_id, poster: m.poster, description: m.description, rating: m.%s}'
+            "MATCH (m:Movie) WHERE m.%s IS NOT NULL WITH m ORDER BY m.%s DESC RETURN {title: m.name, id: m.imdb_id, poster: m.poster, description: m.description, rating: m.%s}"
             % (rating, rating, rating)
         ).values()
         media = [item for sublist in media for item in sublist]
@@ -147,19 +156,37 @@ def get_media():
     id = unquote(request.args.get("id"))
     with neo.session() as s:
         media = (
-            s.run("MATCH (m:Movie {imdb_id: '%s'}) RETURN m as movie" % id).single().value()
+            s.run("MATCH (m:Movie {imdb_id: '%s'}) RETURN m as movie" % id)
+            .single()
+            .value()
         )
-        categories = s.run("MATCH (m:Movie {imdb_id: '%s'})<-[:HAS_MOVIE]-(c:Category) RETURN DISTINCT c.name" % id).values()
-        genres = s.run("MATCH (m:Movie {imdb_id: '%s'})<-[:HAS_MOVIE]-(g:Genre) RETURN DISTINCT g.name" % id).values()
+        categories = s.run(
+            "MATCH (m:Movie {imdb_id: '%s'})<-[:HAS_MOVIE]-(c:Category) RETURN DISTINCT c.name"
+            % id
+        ).values()
+        genres = s.run(
+            "MATCH (m:Movie {imdb_id: '%s'})<-[:HAS_MOVIE]-(g:Genre) RETURN DISTINCT g.name"
+            % id
+        ).values()
 
         categories = [item for sublist in categories for item in sublist]
         genres = [item for sublist in genres for item in sublist]
 
-        similar = s.run("MATCH (m:Movie {imdb_id: '%s'}) OPTIONAL MATCH (m)-[:SIMILAR]-(om:Movie) WITH om ORDER BY om.imdb_rating DESC RETURN DISTINCT collect({id: om.imdb_id, title: om.name, poster: om.poster, description: om.description, rating: om.imdb_rating}) as similar" % id).values()
+        similar = s.run(
+            "MATCH (m:Movie {imdb_id: '%s'}) OPTIONAL MATCH (m)-[:SIMILAR]-(om:Movie) WITH om ORDER BY om.imdb_rating DESC RETURN DISTINCT collect({id: om.imdb_id, title: om.name, poster: om.poster, description: om.description, rating: om.imdb_rating}) as similar"
+            % id
+        ).values()
         similar = similar[0][0]
 
     filename = emotions_chart(media)
-    return render_template("media_details.html", media=media, genres=genres, categories=categories, similar=similar, plot=filename)
+    return render_template(
+        "media_details.html",
+        media=media,
+        genres=genres,
+        categories=categories,
+        similar=similar,
+        plot=filename,
+    )
 
 
 @app.route("/actors")
@@ -181,7 +208,9 @@ def actors_media():
             % actor
         ).values()
         media = [item for sublist in media for item in sublist]
-    return render_template("media_list.html", filter=actor.capitalize(), media=media)
+    return render_template(
+        "media_list.html", filter=actor.capitalize(), media=media
+    )
 
 
 @app.route("/directors")
@@ -191,7 +220,9 @@ def directors():
             "MATCH (p:Person)-[:DIRECTED]->(:Movie) RETURN DISTINCT p.name ORDER BY p.name"
         ).values()
         directors = [item for sublist in directors for item in sublist]
-    return render_template("media_filter.html", filter="directors", items=directors)
+    return render_template(
+        "media_filter.html", filter="directors", items=directors
+    )
 
 
 @app.route("/directors/media")
@@ -207,6 +238,7 @@ def directors_media():
         "media_list.html", filter=director.capitalize(), media=media
     )
 
+
 @app.route("/categories/subcategories")
 def subcategories():
     with neo.session() as s:
@@ -216,12 +248,17 @@ def subcategories():
         subcategories = [item for sublist in subcategories for item in sublist]
     return render_template("categories.html", subcategories=subcategories)
 
+
 @app.route("/categories")
 def categories():
     with neo.session() as s:
-        categories = s.run("MATCH (c:Category) WHERE NOT (c)<-[:HAS_SUBCATEGORY]-() RETURN DISTINCT c.name ORDER BY c.name").values()
+        categories = s.run(
+            "MATCH (c:Category) WHERE NOT (c)<-[:HAS_SUBCATEGORY]-() RETURN DISTINCT c.name ORDER BY c.name"
+        ).values()
         categories = [item for sublist in categories for item in sublist]
-    return render_template("media_filter.html", filter="categories", items=categories)
+    return render_template(
+        "media_filter.html", filter="categories", items=categories
+    )
 
 
 @app.route("/categories/media")
@@ -239,7 +276,9 @@ def categories_media():
 @app.route("/genres")
 def genres():
     with neo.session() as s:
-        genres = s.run("MATCH (g:Genre) RETURN DISTINCT g.name ORDER BY g.name").values()
+        genres = s.run(
+            "MATCH (g:Genre) RETURN DISTINCT g.name ORDER BY g.name"
+        ).values()
         genres = [item for sublist in genres for item in sublist]
     return render_template("media_filter.html", filter="genres", items=genres)
 
@@ -280,11 +319,13 @@ def emotions_chart(media):
     angles = [n / float(N) * 2 * pi for n in range(N)]
     angles += angles[:1]
 
-    fig = plt.figure(figsize=(3,3))
+    fig = plt.figure(figsize=(3, 3))
     ax = fig.add_subplot(111, polar=True)
     plt.xticks(angles[:-1], emotions, color="grey", size=12)
     ax.set_rlabel_position(0)
-    plt.yticks([0.25, 0.5, 0.75], ["0.25", "0.5", "0.75"], color="grey", size=8)
+    plt.yticks(
+        [0.25, 0.5, 0.75], ["0.25", "0.5", "0.75"], color="grey", size=8
+    )
     plt.ylim(0, 1)
     ax.plot(angles, values, linewidth=1, linestyle="solid")
     ax.fill(angles, values, "b", alpha=0.1)

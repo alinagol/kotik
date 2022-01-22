@@ -2,8 +2,8 @@ version: "3"
 services:
   web:
     build:
-      context: ./api
-      dockerfile: Dockerfile
+      context: .
+      target: api
     restart: always
     expose:
      - 5001
@@ -11,7 +11,7 @@ services:
       - redis
       - neo4j
     volumes:
-      - static_volume:/app/static
+      - static_volume:/app/kotik/static
   neo4j:
     image: neo4j:latest
     environment:
@@ -23,8 +23,8 @@ services:
       - 'db:/data'
   worker:
     build:
-      context: ./asyncworker
-      dockerfile: Dockerfile
+      context: .
+      target: worker
     depends_on:
       - redis
       - neo4j
@@ -32,15 +32,15 @@ services:
     image: redis
   nginx:
     build:
-      context: ./nginx
-      dockerfile: Dockerfile
+      context: .
+      target: nginx
     restart: always
     ports:
       - 1337:80
     depends_on:
       - web
     volumes:
-      - static_volume:/app/static
+      - static_volume:/app/kotik/static
 volumes:
   db:
   static_volume:

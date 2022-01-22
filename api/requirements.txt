@@ -1,5 +1,0 @@
-gunicorn
-celery[redis]
-neo4j
-flask
-matplotlib
