@@ -2,8 +2,8 @@ version: "3"
 services:
   web:
     build:
-      context: ./api
-      dockerfile: Dockerfile
+      context: .
+      target: api
     restart: always
     expose:
      - 5001
@@ -23,8 +23,8 @@ services:
       - 'db:/data'
   worker:
     build:
-      context: ./asyncworker
-      dockerfile: Dockerfile
+      context: .
+      target: worker
     depends_on:
       - redis
       - neo4j
@@ -32,8 +32,8 @@ services:
     image: redis:latest
   nginx:
     build:
-      context: ./nginx
-      dockerfile: Dockerfile
+      context: .
+      target: nginx
     restart: always
     ports:
       - 1337:80

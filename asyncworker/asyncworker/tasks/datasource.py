@@ -100,6 +100,10 @@ class IMDB(DataSource):
             self, url=f"{url}/?apikey={api_key}&plot=full&", auth=None
         )
 
+    def get_id(self, title: str, year: int) -> str:
+        imdb_data = self.get(params={"t": title, "y": year})
+        return next(imdb_data)["imdbID"]
+
 
 class IBMWatson(DataSource):
     def __init__(self, url, api_key: str):

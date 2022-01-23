@@ -1,4 +1,3 @@
-import json
 import logging
 import time
 
@@ -6,37 +5,11 @@ import neo4j.exceptions
 import pandas as pd
 from neo4j import GraphDatabase
 
-from asyncworker.tasks.datasource import (
-    IMDB,
-    IBMWatson,
-    Mubi,
-    Ororo,
-    RottenTomatoes,
-)
-
 log = logging.getLogger(__name__)
 
 
 NUM_TOPICS = 500
 TEXT_KEYS = ["plot", "description", "synopsis", "consensus"]
-
-# Config
-with open("../../config.json") as f:
-    config = json.load(f)
-
-# Clients
-neo = GraphDatabase.driver(config["neo4j"]["url"], encrypted=False)
-ororo = Ororo(
-    url=config["ororo"]["url"],
-    username=config["ororo"]["username"],
-    password=config["ororo"]["password"],
-)
-mubi = Mubi(url=config["mubi"]["url"])
-rotten_tomatoes_client = RottenTomatoes(url=config["rotten_tomatoes"]["url"])
-ibm_client = IBMWatson(
-    url=config["ibm"]["url"], api_key=config["ibm"]["apikey"]
-)
-imdb_client = IMDB(url=config["imdb"]["url"], api_key=config["imdb"]["apikey"])
 
 
 def run_query(query: str, session: neo4j.Session) -> neo4j.Result:
@@ -58,10 +31,10 @@ def cypher_escape(string: str) -> str:
         return string
 
 
-def calculate_correlations() -> pd.DataFrame:
+def calculate_correlations(neo4j_client: GraphDatabase) -> pd.DataFrame:
     log.info("Calculating correlations...")
 
-    with neo.session() as session:
+    with neo4j_client.session() as session:
         query = """MATCH (m:Movie)
         OPTIONAL MATCH (g:Genre)-[:HAS_MOVIE]->(m)
         OPTIONAL MATCH (c:Category)-[:HAS_MOVIE]->(m)
@@ -108,8 +81,3 @@ def calculate_correlations() -> pd.DataFrame:
     log.info("Correlations calculated.")
 
     return corr
-
-
-def find_imdb_id(title: str, year: int) -> str:
-    imdb_data = imdb_client.get(params={"t": title, "y": year})
-    return next(imdb_data)["imdbID"]

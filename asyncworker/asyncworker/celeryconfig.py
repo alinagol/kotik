@@ -1,7 +1,6 @@
 import os
 import ssl
 
-import pytz
 from kombu import Queue
 
 # BROKER AND BACKEND
@@ -26,6 +25,3 @@ worker_direct = True
 # SETTINGS
 task_time_limit = 7200
 ignore_result = True
-
-enable_utc = False
-timezone = pytz.timezone("Europe/Amsterdam")

@@ -90,7 +90,7 @@ def choose_results():
     join_params = ",".join(params)
 
     if join_params:
-        queries = ["MATCH (m: Movie {%s})\n" % join_params]
+        queries = [f"MATCH (m: Movie {join_params})\n"]
     else:
         queries = ["MATCH (m: Movie)\n"]
 
