@@ -9,8 +9,16 @@ from nltk.stem.snowball import SnowballStemmer
 from nltk.tokenize import RegexpTokenizer
 from sklearn.preprocessing import MinMaxScaler
 
-import asyncworker.tasks.utils as utils
 from asyncworker.celery import celery_app
+from asyncworker.tasks import utils
+from asyncworker.tasks.clients import (
+    init_ibm_client,
+    init_imdb_client,
+    init_mubi_client,
+    init_neo4j_client,
+    init_ororo_client,
+    init_rotten_tomatoes_client,
+)
 
 log = logging.getLogger(__name__)
 
@@ -26,6 +34,49 @@ class TaskWithRetry(Task):  # pylint: disable=abstract-method
     )
     retry_backoff = True
 
+    _neo4j_client = None
+    _imdb_client = None
+    _ibm_client = None
+    _ororo_client = None
+    _rotten_tomatoes_client = None
+    _mubi_client = None
+
+    @property
+    def neo4j_client(self):
+        if self._neo4j_client is None:
+            self._neo4j_client = init_neo4j_client()
+        return self._neo4j_client
+
+    @property
+    def imdb_client(self):
+        if self._imdb_client is None:
+            self._imdb_client = init_imdb_client()
+        return self._imdb_client
+
+    @property
+    def mubi_client(self):
+        if self._mubi_client is None:
+            self._mubi_client = init_mubi_client()
+        return self._mubi_client
+
+    @property
+    def ibm_client(self):
+        if self._ibm_client is None:
+            self._ibm_client = init_ibm_client()
+        return self._ibm_client
+
+    @property
+    def ororo_client(self):
+        if self._ororo_client is None:
+            self._ororo_client = init_ororo_client()
+        return self._ororo_client
+
+    @property
+    def rotten_tomatoes_client(self):
+        if self._rotten_tomatoes_client is None:
+            self._rotten_tomatoes_client = init_rotten_tomatoes_client()
+        return self._rotten_tomatoes_client
+
 
 @celery_app.task(name="tasks.find_similarities", base=TaskWithRetry)
 def find_similarities() -> str:  # pylint: disable=too-many-locals
@@ -38,7 +89,7 @@ def find_similarities() -> str:  # pylint: disable=too-many-locals
     dictionary = gensim.corpora.Dictionary()
 
     # Clean up old similarities
-    with utils.neo.session() as session:
+    with find_similarities.neo4j_client.session() as session:
         query = "MATCH (:Movie)-[r:SIMILAR]-(:Movie) DETACH DELETE r"
         utils.run_query(query, session)
         query = "MATCH (m:Movie) RETURN m as movie"
@@ -95,7 +146,7 @@ def find_similarities() -> str:  # pylint: disable=too-many-locals
 
     index = gensim.similarities.MatrixSimilarity(lsi[corpus_tfidf])
 
-    corr = utils.calculate_correlations()
+    corr = utils.calculate_correlations(find_similarities.neo4j_client)
     corr_scaled = MinMaxScaler(feature_range=(-1, 1)).fit_transform(corr)
 
     log.info("Updating neo4j with similarities.")
@@ -113,7 +164,7 @@ def find_similarities() -> str:  # pylint: disable=too-many-locals
         ]
         for j, similarity in neighbours:
             if similarity > 0.25:
-                with utils.neo.session() as session:
+                with find_similarities.neo4j_client.session() as session:
                     query = """MATCH (m:Movie {slug: "%s"})
                     MATCH (sm: Movie {slug: "%s"})
                     MERGE (m)-[r:SIMILAR]-(sm)
@@ -135,13 +186,13 @@ def add_media(  # pylint: disable=too-many-branches, too-many-statements
         key: utils.cypher_escape(value) for key, value in item.items()
     }
 
-    with utils.neo.session() as session:
+    with add_media.neo4j_client.session() as session:
         if source == "ororo":
             imdb_id = f'tt{item["imdb_id"]}'
             slug = item_clean["slug"]
         elif source == "mubi":
             try:
-                imdb_id = utils.find_imdb_id(
+                imdb_id = add_media.imdb_client.get_id(
                     item_clean["title"], item_clean["year"]
                 )
                 slug = item_clean["canonical_url"].split("/")[-1]
@@ -286,7 +337,7 @@ def add_media(  # pylint: disable=too-many-branches, too-many-statements
 
 @celery_app.task(name="tasks.add_imdb_data", base=TaskWithRetry)
 def add_imdb_data(imdb_id: str) -> str:
-    with utils.neo.session() as session:
+    with add_imdb_data.neo4j_client.session() as session:
         query = (
             'MATCH (m: Movie {imdb_id: "%s"}) RETURN m.imdb_data;' % imdb_id
         )
@@ -298,7 +349,7 @@ def add_imdb_data(imdb_id: str) -> str:
     queries = []
     try:
         log.debug("Getting IMDB data for %s.", imdb_id)
-        imdb_data = next(utils.imdb_client.get(params={"i": imdb_id}))
+        imdb_data = next(add_imdb_data.imdb_client.get(params={"i": imdb_id}))
     except (requests.exceptions.RequestException, StopIteration) as err:
         log.warning("Cannot get IMDB info for %s: %s.", imdb_id, repr(err))
         raise
@@ -349,7 +400,7 @@ def add_imdb_data(imdb_id: str) -> str:
                 )
                 queries.append(query)
 
-    with utils.neo.session() as session:
+    with add_imdb_data.neo4j_client.session() as session:
         for query in queries:
             utils.run_query(query, session)
 
@@ -358,7 +409,7 @@ def add_imdb_data(imdb_id: str) -> str:
 
 @celery_app.task(name="tasks.add_rotten_tomatoes_data", base=TaskWithRetry)
 def add_rotten_tomatoes_data(imdb_id: str) -> str:
-    with utils.neo.session() as session:
+    with add_rotten_tomatoes_data.neo4j_client.session() as session:
         query = (
             """MATCH (m: Movie {imdb_id: "%s"})
         RETURN m.rotten_tomatoes_data, m.slug, m.name;
@@ -376,7 +427,7 @@ def add_rotten_tomatoes_data(imdb_id: str) -> str:
     try:
         log.info("Getting Rotten Tomatoes data for %s.", imdb_id)
         rt_data = next(
-            utils.rotten_tomatoes_client.get(
+            add_rotten_tomatoes_data.rotten_tomatoes_client.get(
                 path=slug, params={"title": title}
             )
         )
@@ -451,7 +502,7 @@ def add_rotten_tomatoes_data(imdb_id: str) -> str:
         )
         queries.append(query)
 
-    with utils.neo.session() as session:
+    with add_rotten_tomatoes_data.neo4_client.session() as session:
         for query in queries:
             utils.run_query(query, session)
 
@@ -462,7 +513,7 @@ def add_rotten_tomatoes_data(imdb_id: str) -> str:
 def add_ibm_data(  # pylint: disable=too-many-locals, too-many-branches
     imdb_id: str,
 ) -> str:
-    with utils.neo.session() as session:
+    with add_ibm_data.neo4j_client.session() as session:
         query = (
             """MATCH (m: Movie {imdb_id: "%s"})
             RETURN m.ibm_data, m.plot, m.description,
@@ -487,7 +538,7 @@ def add_ibm_data(  # pylint: disable=too-many-locals, too-many-branches
     try:
         log.info("Getting IBM data for %s.", imdb_id)
         ibm_data = next(
-            utils.ibm_client.get(
+            add_ibm_data.ibm_client.get(
                 path="/v1/analyze",
                 params={
                     "version": "2019-07-12",
@@ -546,7 +597,7 @@ def add_ibm_data(  # pylint: disable=too-many-locals, too-many-branches
         )
         queries.append(query)
 
-    with utils.neo.session() as session:
+    with add_ibm_data.neo4j_client.session() as session:
         for query in queries:
             utils.run_query(query, session)
 
@@ -564,21 +615,21 @@ def update_database() -> str:
         "CREATE INDEX person_name IF NOT EXISTS FOR (p:Person) ON (p.name)",
     ]
     for index in indexes:
-        with utils.neo.session() as session:
+        with update_database.neo4j_client.session() as session:
             utils.run_query(index, session)
 
     # Get movies and series from Ororo
-    ororo_movies = utils.ororo.get(path="movies")
+    ororo_movies = update_database.ororo_client.get(path="movies")
     job = group(
         (add_media.si(item, "movies", "ororo") for item in ororo_movies)
     )
     job.apply_async()
-    ororo_shows = utils.ororo.get(path="shows")
+    ororo_shows = update_database.ororo_client.get(path="shows")
     job = group((add_media.si(item, "shows", "ororo") for item in ororo_shows))
     job.apply_async()
 
     # Get movies from Mubi
-    mubi_movies = utils.mubi.get(path="films")
+    mubi_movies = update_database.mubi_client.get(path="films")
     job = group((add_media.si(item, "movies", "mubi") for item in mubi_movies))
     job.apply_async()
 
