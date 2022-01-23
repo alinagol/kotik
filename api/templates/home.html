@@ -9,12 +9,12 @@
             <p> Movies in database: {{ count }} </p>
 
             <div class="form-group">
-                <form action="/update">
+                <form action="/update" method="post">
                     <input class="btn btn-primary" type="submit" value="Refresh Database"/>
                 </form>
             </div>
             <div class="form-group">
-                <form action="/similarity">
+                <form action="/similarity" method="post">
                     <input class="btn btn-primary" type="submit" value="Find similarities"/>
                 </form>
             </div>

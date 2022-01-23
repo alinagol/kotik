@@ -1,5 +1,6 @@
 import logging
 import time
+from typing import Union
 
 import neo4j.exceptions
 import pandas as pd
@@ -9,10 +10,10 @@ log = logging.getLogger(__name__)
 
 
 NUM_TOPICS = 500
-TEXT_KEYS = ["plot", "description", "synopsis", "consensus"]
+TEXT_KEYS = ["plot", "description"]
 
 
-def run_query(query: str, session: neo4j.Session) -> neo4j.Result:
+def run_query(query: str, session: neo4j.Session) -> Union[neo4j.Result, None]:
     retries = 0
     while retries <= 3:
         try:
@@ -21,6 +22,9 @@ def run_query(query: str, session: neo4j.Session) -> neo4j.Result:
             wait = retries * 5
             time.sleep(wait)
             retries += 1
+        except neo4j.exceptions.ConstraintError:
+            log.warning("Item already exists: %s.", str(query))
+            return None
     raise RuntimeError
 
 

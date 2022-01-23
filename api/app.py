@@ -124,13 +124,13 @@ def choose_results():
     return render_template("media_list.html", media=media, filter=request.args)
 
 
-@app.route("/update")
+@app.route("/update", methods=["POST"])
 def update_db():
     celery_app.send_task("tasks.update_database", queue="default")
     return redirect(url_for("home"))
 
 
-@app.route("/similarity")
+@app.route("/similarity", methods=["POST"])
 def similarity():
     celery_app.send_task("tasks.find_similarities", queue="default")
     return redirect(url_for("home"))
@@ -209,7 +209,7 @@ def get_media():
             OPTIONAL MATCH (m)-[:SIMILAR]-(om:Movie)
             WITH om
             ORDER BY om.imdb_rating DESC
-            RETURN DISTINCT collect({id: om.imdb_id, title: om.name, poster: om.poster, description: om.description, rating: om.imdb_rating}) as similar
+            RETURN collect({id: om.imdb_id, title: om.name, poster: om.poster, description: om.description, rating: om.imdb_rating}) as similar
             """
             % media_id
         ).values()
