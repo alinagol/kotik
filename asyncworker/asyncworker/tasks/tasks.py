@@ -226,12 +226,12 @@ def add_media(  # pylint: disable=too-many-branches, too-many-statements
         if media:
             if not media[0]["m.imdb_data"]:
                 add_imdb_data.apply_async(kwargs={"imdb_id": imdb_id})
-            if not media[0]["m.rotten_tomatoes_data"]:
-                add_rotten_tomatoes_data.apply_async(
-                    kwargs={"imdb_id": imdb_id}
-                )
-            if not media[0]["m.ibm_data"]:
-                add_ibm_data.apply_async(kwargs={"imdb_id": imdb_id})
+            # if not media[0]["m.rotten_tomatoes_data"]:
+            #     add_rotten_tomatoes_data.apply_async(
+            #         kwargs={"imdb_id": imdb_id}
+            #     )
+            # if not media[0]["m.ibm_data"]:
+            #     add_ibm_data.apply_async(kwargs={"imdb_id": imdb_id})
             log.info("Skipping %s, already in Neo4j", imdb_id)
             return "Skipping"
 
@@ -272,7 +272,7 @@ def add_media(  # pylint: disable=too-many-branches, too-many-statements
             )
             queries.append(query)
 
-            for genre in item_clean["array_genres"]:
+            for genre in set(item_clean["array_genres"]):
                 query = """MATCH (m: Movie {imdb_id: "%s"})
                                        MERGE (g: Genre {name: "%s"})
                                        WITH g, m
@@ -283,7 +283,7 @@ def add_media(  # pylint: disable=too-many-branches, too-many-statements
                 )
                 queries.append(query)
 
-            for country in item_clean["array_countries"]:
+            for country in set(item_clean["array_countries"]):
                 query = """MATCH (m: Movie {imdb_id: "%s"})
                                                MERGE (c: Country {name: "%s"})
                                                WITH c, m
@@ -327,8 +327,8 @@ def add_media(  # pylint: disable=too-many-branches, too-many-statements
     # Add extra information
     job = chain(
         add_imdb_data.si(imdb_id),
-        add_rotten_tomatoes_data.si(imdb_id),
-        add_ibm_data.si(imdb_id),
+        # add_rotten_tomatoes_data.si(imdb_id),
+        # add_ibm_data.si(imdb_id),
     )
     job.apply_async()
 
@@ -365,7 +365,7 @@ def add_imdb_data(imdb_id: str) -> str:
         )
         queries.append(query)
     if "Genre" in imdb_data.keys():
-        for genre in imdb_data["Genre"].split(","):
+        for genre in set(imdb_data["Genre"].split(",")):
             query = """MATCH (m: Movie {imdb_id: "%s"})
                 MERGE (g: Genre {name: "%s"})
                 WITH g, m
@@ -376,7 +376,7 @@ def add_imdb_data(imdb_id: str) -> str:
             )
             queries.append(query)
     if "Actors" in imdb_data.keys():
-        for actor in imdb_data["Actors"].split(","):
+        for actor in set(imdb_data["Actors"].split(",")):
             if actor != "n/a":
                 query = """MATCH (m: Movie {imdb_id: "%s"})
                     MERGE (p: Person {name: "%s"})
@@ -388,7 +388,7 @@ def add_imdb_data(imdb_id: str) -> str:
                 )
                 queries.append(query)
     if "Director" in imdb_data.keys():
-        for director in imdb_data["Director"].split(","):
+        for director in set(imdb_data["Director"].split(",")):
             if director != "n/a":
                 query = """MATCH (m: Movie {imdb_id: "%s"})
                     MERGE (p: Person {name: "%s"})
@@ -551,7 +551,7 @@ def add_ibm_data(  # pylint: disable=too-many-locals, too-many-branches
         log.warning("Cannot get IBM info for %s: %s.", imdb_id, repr(err))
         raise
 
-    for cat in ibm_data["categories"]:
+    for cat in set(ibm_data["categories"]):
         if cat["score"] > 0.75:
             categories = cat["label"].split("/")
             categories = [c.lower().strip() for c in categories if c]
@@ -608,15 +608,15 @@ def add_ibm_data(  # pylint: disable=too-many-locals, too-many-branches
 def update_database() -> str:
     log.info("Updating movie database...")
 
-    indexes = [
-        "CREATE INDEX slug IF NOT EXISTS FOR (m:Movie) ON (m.slug, m.name)",  # pylint: disable=line-too-long
-        "CREATE INDEX genre_name IF NOT EXISTS FOR (g:Genre) ON (g.name)",
-        "CREATE INDEX category_name IF NOT EXISTS FOR (c:Category) ON (c.name)",  # pylint: disable=line-too-long
-        "CREATE INDEX person_name IF NOT EXISTS FOR (p:Person) ON (p.name)",
+    constraints = [
+        "CREATE CONSTRAINT ON (m:Movie) ASSERT m.imdb_id IS UNIQUE",
+        "CREATE CONSTRAINT ON (g:Genre) ASSERT g.name IS UNIQUE",
+        "CREATE CONSTRAINT ON (c:Category) ASSERT c.name IS UNIQUE",
+        "CREATE CONSTRAINT ON (p:Person) ASSERT p.name IS UNIQUE",
     ]
-    for index in indexes:
+    for constraint in constraints:
         with update_database.neo4j_client.session() as session:
-            utils.run_query(index, session)
+            utils.run_query(constraint, session)
 
     # Get movies and series from Ororo
     ororo_movies = update_database.ororo_client.get(path="movies")
@@ -628,9 +628,9 @@ def update_database() -> str:
     job = group((add_media.si(item, "shows", "ororo") for item in ororo_shows))
     job.apply_async()
 
-    # Get movies from Mubi
-    mubi_movies = update_database.mubi_client.get(path="films")
-    job = group((add_media.si(item, "movies", "mubi") for item in mubi_movies))
-    job.apply_async()
+    # # Get movies from Mubi
+    # mubi_movies = update_database.mubi_client.get(path="films")
+    # job = group((add_media.si(item, "movies", "mubi") for item in mubi_movies))
+    # job.apply_async()
 
     return "Started update"
