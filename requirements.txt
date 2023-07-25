@@ -3,7 +3,7 @@ celery[redis]==5.2.3
 neo4j==4.4.1
 flask==2.3.2
 matplotlib==3.5.1
-certifi==2022.12.7
+certifi==2023.7.22
 requests==2.31.0
 pandas==1.4.0
 nltk==3.6.7
